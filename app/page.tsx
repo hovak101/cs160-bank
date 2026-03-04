@@ -1,57 +1,62 @@
-import { DeployButton } from "@/components/deploy-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { AuthButton } from "@/components/auth-button";
-import { Hero } from "@/components/hero";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { ConnectSupabaseSteps } from "@/components/tutorial/connect-supabase-steps";
-import { SignUpUserSteps } from "@/components/tutorial/sign-up-user-steps";
-import { hasEnvVars } from "@/lib/utils";
+"use client";
+
 import Link from "next/link";
-import { Suspense } from "react";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-        <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-          <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-            <div className="flex gap-5 items-center font-semibold">
-              <Link href={"/"}>Next.js Supabase Starter</Link>
-              <div className="flex items-center gap-2">
-                <DeployButton />
-              </div>
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 flex items-center justify-center p-6">
+      <div className="w-full max-w-4xl grid md:grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 shadow-xl bg-white">
+        
+        {/* Left - Branding */}
+        <section className="p-10 md:p-12 bg-gradient-to-b from-slate-900 to-slate-800 text-white">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center">
+              <span className="text-xl font-semibold">G3</span>
             </div>
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <Suspense>
-                <AuthButton />
-              </Suspense>
-            )}
+            <div>
+              <div className="text-sm text-white/70">Online Banking</div>
+              <div className="text-2xl font-semibold">Group 3 Bank</div>
+            </div>
           </div>
-        </nav>
-        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
-          <Hero />
-          <main className="flex-1 flex flex-col gap-6 px-4">
-            <h2 className="font-medium text-xl mb-4">Next steps</h2>
-            {hasEnvVars ? <SignUpUserSteps /> : <ConnectSupabaseSteps />}
-          </main>
-        </div>
 
-        <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-          <p>
-            Powered by{" "}
-            <a
-              href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-              target="_blank"
-              className="font-bold hover:underline"
-              rel="noreferrer"
-            >
-              Supabase
-            </a>
+          <p className="mt-8 text-white/75 leading-relaxed">
+            Secure access to accounts, transfers, and bill payments.
           </p>
-          <ThemeSwitcher />
-        </footer>
+
+          <div className="mt-12 text-xs text-white/50">
+            © 2026 Group 3 Bank • CS160
+          </div>
+        </section>
+
+        {/* Right - Buttons Only */}
+        <section className="p-10 md:p-12 flex flex-col justify-center space-y-6">
+          <h1 className="text-2xl font-semibold text-slate-900 text-center">
+            Welcome
+          </h1>
+
+          <Link
+            href="/auth/login"
+            className="w-full h-12 rounded-xl bg-slate-900 text-white font-medium
+                       hover:bg-slate-800 transition flex items-center justify-center"
+          >
+            Sign In
+          </Link>
+
+          <Link
+            href="/auth/sign-up"
+            className="w-full h-12 rounded-xl border border-slate-200 text-slate-900 font-medium
+                       hover:bg-slate-50 transition flex items-center justify-center"
+          >
+            Sign Up
+          </Link>
+
+          <Link
+            href="/auth/forgot-password"
+            className="text-center text-sm text-slate-600 hover:text-slate-900 hover:underline"
+          >
+            Forgot Password?
+          </Link>
+        </section>
       </div>
     </main>
   );
