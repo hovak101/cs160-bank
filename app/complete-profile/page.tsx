@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type CustomerRow = {
+  customer_id?: string;
+  user_id?: string;
   first_name: string | null;
   last_name: string | null;
   phone_number: string | null;
@@ -32,14 +34,15 @@ function isCustomerProfileComplete(customer: CustomerRow | null) {
 }
 
 export default function CompleteProfilePage() {
-  const supabase = createClient();
   const router = useRouter();
+  const supabase = createClient();
 
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const [email, setEmail] = useState("");
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -54,6 +57,7 @@ export default function CompleteProfilePage() {
   useEffect(() => {
     async function loadProfile() {
       setMsg(null);
+      setChecking(true);
 
       const {
         data: { user },
@@ -70,7 +74,21 @@ export default function CompleteProfilePage() {
       const { data: customer, error } = await supabase
         .from("customers")
         .select(
-          "first_name, last_name, phone_number, tax_id, address_line_1, address_line_2, city, state, zip_code, country, kyc_status"
+          `
+            customer_id,
+            user_id,
+            first_name,
+            last_name,
+            phone_number,
+            tax_id,
+            address_line_1,
+            address_line_2,
+            city,
+            state,
+            zip_code,
+            country,
+            kyc_status
+          `
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -83,7 +101,7 @@ export default function CompleteProfilePage() {
 
       if (!customer) {
         setMsg(
-          "Customer profile row was not found. Please make sure the signup trigger created it."
+          "Customer profile row was not found. Run the SQL trigger/backfill first."
         );
         setChecking(false);
         return;
@@ -111,50 +129,70 @@ export default function CompleteProfilePage() {
     loadProfile();
   }, [router, supabase]);
 
-async function onSubmit(e: React.FormEvent) {
-  e.preventDefault();
-  setMsg(null);
-  setLoading(true);
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setLoading(true);
 
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser();
 
-  if (authErr || !user) {
+    if (authErr || !user) {
+      setLoading(false);
+      setMsg("You must be logged in first.");
+      router.replace("/");
+      return;
+    }
+
+    const { data: existingCustomer, error: checkErr } = await supabase
+      .from("customers")
+      .select("customer_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (checkErr) {
+      setLoading(false);
+      setMsg(checkErr.message);
+      return;
+    }
+
+    if (!existingCustomer) {
+      setLoading(false);
+      setMsg(
+        "Customer row does not exist yet. Please run the SQL trigger/backfill script first."
+      );
+      return;
+    }
+
+    const { error } = await supabase
+      .from("customers")
+      .update({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone_number: phoneNumber.trim(),
+        tax_id: taxId.trim() || null,
+        address_line_1: addressLine1.trim(),
+        address_line_2: addressLine2.trim() || null,
+        city: city.trim(),
+        state: stateValue.trim(),
+        zip_code: zipCode.trim(),
+        country: country.trim(),
+        kyc_status: "pending",
+      })
+      .eq("user_id", user.id);
+
     setLoading(false);
-    setMsg("You must be logged in first.");
-    router.replace("/");
-    return;
+
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+
+    router.refresh();
+    router.replace("/dashboard");
   }
-
-  const { error } = await supabase
-    .from("customers")
-    .update({
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      phone_number: phoneNumber.trim(),
-      tax_id: taxId.trim() || null,
-      address_line_1: addressLine1.trim(),
-      address_line_2: addressLine2.trim() || null,
-      city: city.trim(),
-      state: stateValue.trim(),
-      zip_code: zipCode.trim(),
-      country: country.trim(),
-      kyc_status: "pending",
-    })
-    .eq("user_id", user.id);
-
-  setLoading(false);
-
-  if (error) {
-    setMsg(error.message);
-    return;
-  }
-
-  router.refresh();
-  router.replace("/dashboard");
-}
 
   if (checking) {
     return (
@@ -167,7 +205,7 @@ async function onSubmit(e: React.FormEvent) {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 px-4 py-10">
       <div className="mx-auto w-full max-w-2xl">
-        <div className="rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl">
           <div className="p-8 sm:p-10">
             <div className="text-center">
               <h1 className="text-2xl font-semibold text-slate-900">
@@ -196,7 +234,7 @@ async function onSubmit(e: React.FormEvent) {
                   type="email"
                   value={email}
                   disabled
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-100 px-3 text-slate-500"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-slate-500"
                 />
               </div>
 
@@ -207,7 +245,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -219,7 +257,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -231,7 +269,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -243,7 +281,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={taxId}
                   onChange={(e) => setTaxId(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                 />
               </div>
 
@@ -254,7 +292,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={addressLine1}
                   onChange={(e) => setAddressLine1(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -266,7 +304,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={addressLine2}
                   onChange={(e) => setAddressLine2(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                 />
               </div>
 
@@ -277,7 +315,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -289,7 +327,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={stateValue}
                   onChange={(e) => setStateValue(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -301,7 +339,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={zipCode}
                   onChange={(e) => setZipCode(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -313,7 +351,7 @@ async function onSubmit(e: React.FormEvent) {
                 <input
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
+                  className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:border-slate-300 focus:bg-white"
                   required
                 />
               </div>
@@ -322,7 +360,7 @@ async function onSubmit(e: React.FormEvent) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full h-11 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition disabled:opacity-60"
+                  className="h-11 w-full rounded-xl bg-slate-900 font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
                 >
                   {loading ? "Saving..." : "Save and Continue"}
                 </button>
