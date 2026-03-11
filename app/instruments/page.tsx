@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
 
-// vercel bs
 async function InstrumentsData() {
   const supabase = await createClient();
   const { data: instruments } = await supabase.from("instruments").select();
