@@ -25,6 +25,10 @@ export default {
           500: "hsl(var(--coral-500))",
         },
         charcoal: {
+          300: "hsl(var(--charcoal-300))",
+          400: "hsl(var(--charcoal-400))",
+          500: "hsl(var(--charcoal-500))",
+          600: "hsl(var(--charcoal-600))",
           700: "hsl(var(--charcoal-700))",
           800: "hsl(var(--charcoal-800))",
           900: "hsl(var(--charcoal-900))",

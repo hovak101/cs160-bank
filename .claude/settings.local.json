@@ -4,7 +4,11 @@
       "Bash(ls /c/Users/alex/Desktop/cs160_swe/bank/app/\\\\\\(customer\\\\\\) && ls /c/Users/alex/Desktop/cs160_swe/bank/app/\\\\\\(manager\\\\\\))",
       "Bash(cd \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\" && npx shadcn@latest add separator --yes 2>&1)",
       "Bash(cd \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\" && npx tsc --noEmit 2>&1 | head -40)",
-      "Bash(cd \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\" && npx tsc --noEmit 2>&1 | grep \"landing\\\\|globals\\\\|tailwind\\\\|layout.tsx\" | head -20)"
+      "Bash(cd \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\" && npx tsc --noEmit 2>&1 | grep \"landing\\\\|globals\\\\|tailwind\\\\|layout.tsx\" | head -20)",
+      "Bash(find \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\" -name \"*bank*\" -o -name \"*shell*\" 2>/dev/null | grep -v node_modules)",
+      "Bash(find /c/Users/alex/Desktop/cs160_swe/bank/components -type f -name \"*.tsx\" | grep -v node_modules | xargs grep -l \"customers\\\\|users\\\\|profile\" | head -10)",
+      "Bash(cat /c/Users/alex/Desktop/cs160_swe/bank/app/\\\\\\(manager\\\\\\)/layout.tsx)",
+      "Bash(cat \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\\\\app\\\\\\(manager\\)\\\\layout.tsx\")"
     ]
   }
 }

@@ -1,25 +1,11 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function LoginForm({
-  className,
-  ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -38,73 +24,77 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/protected");
+      router.push("/dashboard");
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
+      setError(
+        error instanceof Error ? error.message : "Invalid email or password."
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
+  const inputClass =
+    "mt-1.5 w-full h-11 rounded-xl border border-charcoal-700 bg-charcoal-800 px-3 text-sm text-white placeholder-charcoal-400 outline-none focus:border-teal-500 transition";
+  const labelClass =
+    "block text-xs font-medium text-charcoal-300 uppercase tracking-wide";
+
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
-            Enter your email below to login to your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin}>
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
-                  <Link
-                    href="/auth/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                  >
-                    Forgot your password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
-              </Button>
-            </div>
-            <div className="mt-4 text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/auth/sign-up"
-                className="underline underline-offset-4"
-              >
-                Sign up
-              </Link>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <form onSubmit={handleLogin} className="space-y-4">
+      {error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      <div>
+        <label className={labelClass}>Email</label>
+        <input
+          type="email"
+          placeholder="you@example.com"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={inputClass}
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <label className={labelClass}>Password</label>
+          <Link
+            href="/auth/forgot-password"
+            className="text-xs text-charcoal-400 hover:text-teal-400 transition"
+          >
+            Forgot password?
+          </Link>
+        </div>
+        <input
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={inputClass}
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="mt-2 w-full h-11 rounded-xl bg-teal-500 text-sm font-semibold text-white hover:bg-teal-400 transition disabled:opacity-60"
+      >
+        {isLoading ? "Signing in..." : "Sign In"}
+      </button>
+
+      <p className="text-center text-sm text-charcoal-400">
+        Don&apos;t have an account?{" "}
+        <Link
+          href="/auth/sign-up"
+          className="text-teal-400 hover:text-teal-300 hover:underline"
+        >
+          Create one
+        </Link>
+      </p>
+    </form>
   );
 }
