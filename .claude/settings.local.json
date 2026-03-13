@@ -8,7 +8,8 @@
       "Bash(find \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\" -name \"*bank*\" -o -name \"*shell*\" 2>/dev/null | grep -v node_modules)",
       "Bash(find /c/Users/alex/Desktop/cs160_swe/bank/components -type f -name \"*.tsx\" | grep -v node_modules | xargs grep -l \"customers\\\\|users\\\\|profile\" | head -10)",
       "Bash(cat /c/Users/alex/Desktop/cs160_swe/bank/app/\\\\\\(manager\\\\\\)/layout.tsx)",
-      "Bash(cat \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\\\\app\\\\\\(manager\\)\\\\layout.tsx\")"
+      "Bash(cat \"C:\\\\Users\\\\alex\\\\Desktop\\\\cs160_swe\\\\bank\\\\app\\\\\\(manager\\)\\\\layout.tsx\")",
+      "Bash(find /c/Users/alex/Desktop/cs160_swe/bank -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" \\\\\\) | xargs grep -l \"accounts\" 2>/dev/null)"
     ]
   }
 }

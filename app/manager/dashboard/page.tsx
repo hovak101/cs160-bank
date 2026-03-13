@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Landmark, Users } from "lucide-react";
+
+export const dynamic = "force-dynamic";
 import { LogoutButton } from "@/components/logout-button";
 
 export default async function ManagerDashboardPage() {
