@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { fontFamily as defaultFontFamily } from "tailwindcss/defaultTheme";
 
 export default {
   content: [
@@ -9,7 +10,29 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", ...defaultFontFamily.sans],
+      },
       colors: {
+        teal: {
+          300: "hsl(var(--teal-300))",
+          400: "hsl(var(--teal-400))",
+          500: "hsl(var(--teal-500))",
+        },
+        coral: {
+          400: "hsl(var(--coral-400))",
+          500: "hsl(var(--coral-500))",
+        },
+        charcoal: {
+          300: "hsl(var(--charcoal-300))",
+          400: "hsl(var(--charcoal-400))",
+          500: "hsl(var(--charcoal-500))",
+          600: "hsl(var(--charcoal-600))",
+          700: "hsl(var(--charcoal-700))",
+          800: "hsl(var(--charcoal-800))",
+          900: "hsl(var(--charcoal-900))",
+          950: "hsl(var(--charcoal-950))",
+        },
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {

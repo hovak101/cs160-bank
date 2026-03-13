@@ -4,141 +4,337 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Landmark } from "lucide-react";
+
+type AccountType = "customer" | "manager";
+
+function validate(
+  type: AccountType,
+  fields: Record<string, string>
+): string | null {
+  if (!fields.firstName.trim()) return "First name is required.";
+  if (!fields.lastName.trim()) return "Last name is required.";
+  if (!fields.email.trim()) return "Email is required.";
+
+  if (type === "customer") {
+    const phoneDigits = fields.phone.replace(/\D/g, "");
+    if (phoneDigits.length < 10)
+      return "Phone number must have at least 10 digits.";
+
+    const ssnDigits = fields.ssn.replace(/\D/g, "");
+    if (ssnDigits.length !== 9) return "SSN must be exactly 9 digits.";
+  }
+
+  if (type === "manager") {
+    if (!/^[a-zA-Z0-9]{4,}$/.test(fields.employeeId))
+      return "Employee ID must be at least 4 alphanumeric characters.";
+  }
+
+  if (fields.password.length < 8)
+    return "Password must be at least 8 characters.";
+  if (fields.password !== fields.confirmPassword)
+    return "Passwords do not match.";
+
+  return null;
+}
+
+const inputClass =
+  "mt-1.5 w-full h-11 rounded-xl border border-charcoal-700 bg-charcoal-800 px-3 text-sm text-white placeholder-charcoal-400 outline-none focus:border-teal-500 focus:bg-charcoal-900 transition";
+
+const labelClass = "block text-xs font-medium text-charcoal-300 uppercase tracking-wide";
 
 export default function SignUpPage() {
   const supabase = createClient();
   const router = useRouter();
 
+  const [accountType, setAccountType] = useState<AccountType>("customer");
+
+  // shared
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // customer only
+  const [phone, setPhone] = useState("");
+  const [ssn, setSsn] = useState("");
+
+  // manager only
+  const [employeeId, setEmployeeId] = useState("");
+
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [checkEmail, setCheckEmail] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null);
-    setSuccess(null);
+    setError(null);
 
-    if (password !== confirmPassword) {
-      setMsg("Passwords do not match.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setMsg("Password must be at least 6 characters.");
+    const validationError = validate(accountType, {
+      firstName,
+      lastName,
+      email,
+      phone,
+      ssn,
+      employeeId,
+      password,
+      confirmPassword,
+    });
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
+    const metadata: Record<string, string> = {
+      role: accountType,
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+    };
+
+    if (accountType === "customer") {
+      metadata.phone_number = phone.trim();
+      metadata.tax_id = ssn.replace(/\D/g, "");
+    } else {
+      metadata.employee_id = employeeId.trim();
+    }
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
       password,
+      options: { data: metadata },
     });
 
     setLoading(false);
 
-    if (error) {
-      setMsg(error.message);
+    if (signUpError) {
+      setError(signUpError.message);
       return;
     }
 
-    setSuccess("Account created successfully. Please sign in.");
-    setTimeout(() => {
-      router.push("/");
-    }, 1000);
+    // If session exists, user is auto-logged in (email confirm disabled)
+    if (data.session) {
+      router.push("/dashboard");
+    } else {
+      // Email confirmation required
+      setCheckEmail(true);
+    }
+  }
+
+  if (checkEmail) {
+    return (
+      <div className="dark min-h-screen bg-charcoal-950 flex items-center justify-center px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="rounded-2xl border border-charcoal-700 bg-charcoal-900 p-10 shadow-xl">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-teal-500/10">
+              <Landmark className="h-6 w-6 text-teal-400" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">Check your email</h2>
+            <p className="mt-2 text-sm text-charcoal-400">
+              We sent a confirmation link to <span className="text-white">{email}</span>.
+              Click it to activate your account, then sign in.
+            </p>
+            <Link
+              href="/auth/login"
+              className="mt-6 inline-block w-full rounded-xl bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-400 transition text-center"
+            >
+              Go to Sign In
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 flex items-center justify-center px-4 py-10">
+    <div className="dark min-h-screen bg-charcoal-950 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,hsl(174_72%_42%_/_0.12),transparent_70%)] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden">
-          <div className="p-8 sm:p-10">
-            <div className="text-center">
-              <h1 className="text-xl font-semibold text-slate-900">
-                Create Account
-              </h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Start with your email and password
-              </p>
+        {/* Logo */}
+        <div className="mb-6 flex items-center justify-center gap-2">
+          <Landmark className="h-5 w-5 text-teal-400" />
+          <span className="text-lg font-semibold text-white">
+            Vitality <span className="text-teal-400">Bank</span>
+          </span>
+        </div>
+
+        <div className="rounded-2xl border border-charcoal-700 bg-charcoal-900 shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="px-8 pt-8 pb-4">
+            <h1 className="text-xl font-semibold text-white">Create Account</h1>
+            <p className="mt-1 text-sm text-charcoal-400">
+              Open your Vitality Bank account today.
+            </p>
+
+            {/* Toggle */}
+            <div className="mt-5 flex rounded-xl border border-charcoal-700 bg-charcoal-800 p-1">
+              <button
+                type="button"
+                onClick={() => { setAccountType("customer"); setError(null); }}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                  accountType === "customer"
+                    ? "bg-teal-500 text-white shadow"
+                    : "text-charcoal-400 hover:text-white"
+                }`}
+              >
+                Customer
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAccountType("manager"); setError(null); }}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                  accountType === "manager"
+                    ? "bg-teal-500 text-white shadow"
+                    : "text-charcoal-400 hover:text-white"
+                }`}
+              >
+                Manager
+              </button>
+            </div>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={onSubmit} className="px-8 pb-8 space-y-4">
+            {error && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {error}
+              </div>
+            )}
+
+            {/* Name row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>First Name</label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Jane"
+                  className={inputClass}
+                  required
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Last Name</label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Smith"
+                  className={inputClass}
+                  required
+                />
+              </div>
             </div>
 
-            {msg && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {msg}
+            {/* Email */}
+            <div>
+              <label className={labelClass}>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className={inputClass}
+                required
+              />
+            </div>
+
+            {/* Customer-specific fields */}
+            {accountType === "customer" && (
+              <>
+                <div>
+                  <label className={labelClass}>Phone Number</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(555) 867-5309"
+                    className={inputClass}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>
+                    SSN / Tax ID
+                    <span className="ml-1 normal-case text-charcoal-500">(9 digits)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={ssn}
+                    onChange={(e) => setSsn(e.target.value)}
+                    placeholder="•••-••-••••"
+                    maxLength={11}
+                    className={inputClass}
+                    required
+                    autoComplete="off"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Manager-specific fields */}
+            {accountType === "manager" && (
+              <div>
+                <label className={labelClass}>Employee ID</label>
+                <input
+                  type="text"
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                  placeholder="EMP0042"
+                  className={inputClass}
+                  required
+                />
               </div>
             )}
 
-            {success && (
-              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                {success}
-              </div>
-            )}
+            {/* Password */}
+            <div>
+              <label className={labelClass}>
+                Password
+                <span className="ml-1 normal-case text-charcoal-500">(min 8 chars)</span>
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClass}
+                required
+              />
+            </div>
 
-            <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
-                  required
-                />
-              </div>
+            <div>
+              <label className={labelClass}>Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={inputClass}
+                required
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
-                  required
-                />
-              </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-2 w-full h-11 rounded-xl bg-teal-500 text-sm font-semibold text-white hover:bg-teal-400 transition disabled:opacity-60"
+            >
+              {loading ? "Creating account..." : "Create Account"}
+            </button>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-2 w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 outline-none focus:bg-white focus:border-slate-300"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full h-11 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition disabled:opacity-60"
+            <p className="text-center text-sm text-charcoal-400">
+              Already have an account?{" "}
+              <Link
+                href="/auth/login"
+                className="text-teal-400 hover:text-teal-300 hover:underline"
               >
-                {loading ? "Creating..." : "Create Account"}
-              </button>
-
-              <div className="text-center">
-                <Link
-                  href="/"
-                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  Back to Sign In
-                </Link>
-              </div>
-            </form>
-          </div>
-          <div className="h-3 bg-gradient-to-b from-white to-slate-50" />
+                Sign in
+              </Link>
+            </p>
+          </form>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
