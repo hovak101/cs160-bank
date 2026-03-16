@@ -1,34 +1,28 @@
-# Bank Development Guidelines
+## Setup
 
-## Initial Setup
+1. **Install dependencies:** `npm install`
+2. **Environment variables:** Create `.env.local` in the root and add your Supabase URL and Anon Key.
+3. **Start local database:** `npx supabase start` (Access Local Studio at http://127.0.0.1:54323)
+4. **Run development server:** `npm run dev` (App runs at http://localhost:3000)
 
-1. **Clone the repository and install dependencies:**
-   `npm install`
-
-2. **Set up your environment variables:**
-   Create a `.env.local` file in the root of the project. Get the following environment variables from the supabase dashboard and add this to the file:
-   `NEXT_PUBLIC_SUPABASE_URL=your_remote_project_url`
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY=your_remote_anon_key`
-
-3. **Run the development server:**
-   `npm run dev`
-   The app will be available at http://localhost:3000 and will connect directly to our remote Supabase database.
+---
 
 ## Workflow
-### Implementing Feature
-Basically 3 steps:
-1. Frontend
-   - Go to page.tsx of folder path corresponding to the url you're working on
-      - For example, if you're working on the bank.com/dashboard url, you would edit page.tsx in /app/(bank)/dashboard
-2. Backend
-   - Create an endpoint to get and return the data requested from endpoint
-   - Make sure to test for correct behavior!
-3. See DB Steps Below
-### Database Changes
-1. Make any structural changes (creating tables, columns, or Row Level Security policies) directly in the Supabase Dashboard.
-2. Once your changes are working, open your terminal and pull the updated schema into the codebase:
-   `npx supabase db pull`
-3. Also, run this to update typescript types:
-   `npx supabase gen types typescript --linked > lib/supabase/database.types.ts`
-4. This command updates the `.sql` files inside the `supabase/migrations/` directory. 
-5. Commit these changes to Git. This acts as our database documentation and backup.
+
+### 1. Features (Frontend & Backend)
+* **Frontend:** Edit the `page.tsx` corresponding to your route (e.g., for `/dashboard`, edit `/app/(bank)/dashboard/page.tsx`).
+* **Backend:** Create or update the relevant API endpoints and test behavior.
+
+### 2. Database Changes (Local-First Protocol)
+**⚠️ CRITICAL: DO NOT make schema changes in the remote Supabase Dashboard.** Always make changes locally first:
+1. Apply your schema changes in your Local Studio UI.
+2. Generate a migration file: 
+   `npx supabase db diff -f brief_name_of_change`
+3. Update TypeScript types: 
+   `npx supabase gen types typescript --local > lib/supabase/database.types.ts`
+4. Commit the new `.sql` file (in `supabase/migrations/`) and `database.types.ts` to Git.
+
+### 3. Syncing with Teammates
+When pulling down database changes made by another teammate, do not use `db pull`. Instead:
+1. `git pull`
+2. `npx supabase db reset` (Wipes local DB and perfectly applies new migrations)
