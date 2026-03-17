@@ -48,7 +48,7 @@ Basically 3 steps:
 
 ### Database Changes
 
-1. Make any structural changes (creating tables, columns, or Row Level Security policies) directly in the Supabase Dashboard.
+1. Make any structural changes (creating tables, columns, or Row Level Security policies) directly in the remote Supabase Dashboard, one person at a time.
 
 2. Once your changes are working, open your terminal and pull the updated schema into the codebase:
 
