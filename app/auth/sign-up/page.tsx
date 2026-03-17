@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Landmark } from "lucide-react";
 
-type AccountType = "customer" | "manager";
+type AccountType = "customer";
 
 function validate(
   type: AccountType,
@@ -23,11 +23,6 @@ function validate(
 
     const ssnDigits = fields.ssn.replace(/\D/g, "");
     if (ssnDigits.length !== 9) return "SSN must be exactly 9 digits.";
-  }
-
-  if (type === "manager") {
-    if (!/^[a-zA-Z0-9]{4,}$/.test(fields.employeeId))
-      return "Employee ID must be at least 4 alphanumeric characters.";
   }
 
   if (fields.password.length < 8)
@@ -60,9 +55,6 @@ export default function SignUpPage() {
   const [phone, setPhone] = useState("");
   const [ssn, setSsn] = useState("");
 
-  // manager only
-  const [employeeId, setEmployeeId] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
@@ -77,7 +69,6 @@ export default function SignUpPage() {
       email,
       phone,
       ssn,
-      employeeId,
       password,
       confirmPassword,
     });
@@ -97,8 +88,6 @@ export default function SignUpPage() {
     if (accountType === "customer") {
       metadata.phone_number = phone.trim();
       metadata.tax_id = ssn.replace(/\D/g, "");
-    } else {
-      metadata.employee_id = employeeId.trim();
     }
 
     const { data, error: signUpError } = await supabase.auth.signUp({
@@ -179,17 +168,6 @@ export default function SignUpPage() {
                 }`}
               >
                 Customer
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAccountType("manager"); setError(null); }}
-                className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-                  accountType === "manager"
-                    ? "bg-teal-500 text-white shadow"
-                    : "text-charcoal-400 hover:text-white"
-                }`}
-              >
-                Manager
               </button>
             </div>
           </div>
@@ -273,68 +251,10 @@ export default function SignUpPage() {
                 </div>
               </>
             )}
-
-            {/* Manager-specific fields */}
-            {accountType === "manager" && (
-              <div>
-                <label className={labelClass}>Employee ID</label>
-                <input
-                  type="text"
-                  value={employeeId}
-                  onChange={(e) => setEmployeeId(e.target.value)}
-                  placeholder="EMP0042"
-                  className={inputClass}
-                  required
-                />
-              </div>
-            )}
-
-            {/* Password */}
-            <div>
-              <label className={labelClass}>
-                Password
-                <span className="ml-1 normal-case text-charcoal-500">(min 8 chars)</span>
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-                required
-              />
-            </div>
-
-            <div>
-              <label className={labelClass}>Confirm Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className={inputClass}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 w-full h-11 rounded-xl bg-teal-500 text-sm font-semibold text-white hover:bg-teal-400 transition disabled:opacity-60"
-            >
-              {loading ? "Creating account..." : "Create Account"}
-            </button>
-
-            <p className="text-center text-sm text-charcoal-400">
-              Already have an account?{" "}
-              <Link
-                href="/auth/login"
-                className="text-teal-400 hover:text-teal-300 hover:underline"
-              >
-                Sign in
-              </Link>
-            </p>
+          
           </form>
-        </div>
-      </div>
+       </div>
+      </div> 
     </div>
   );
 }
