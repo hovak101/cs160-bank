@@ -1,147 +1,94 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Landmark } from "lucide-react";
+import { Landmark, CheckCircle2 } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
-type AccountType = "customer" | "manager";
-
-function validate(
-  type: AccountType,
-  fields: Record<string, string>
-): string | null {
-  if (!fields.firstName.trim()) return "First name is required.";
-  if (!fields.lastName.trim()) return "Last name is required.";
-  if (!fields.email.trim()) return "Email is required.";
-
-  if (type === "customer") {
-    const phoneDigits = fields.phone.replace(/\D/g, "");
-    if (phoneDigits.length < 10)
-      return "Phone number must have at least 10 digits.";
-
-    const ssnDigits = fields.ssn.replace(/\D/g, "");
-    if (ssnDigits.length !== 9) return "SSN must be exactly 9 digits.";
-  }
-
-  if (type === "manager") {
-    if (!/^[a-zA-Z0-9]{4,}$/.test(fields.employeeId))
-      return "Employee ID must be at least 4 alphanumeric characters.";
-  }
-
-  if (fields.password.length < 8)
-    return "Password must be at least 8 characters.";
-  if (fields.password !== fields.confirmPassword)
-    return "Passwords do not match.";
-
-  return null;
-}
-
-const inputClass =
-  "mt-1.5 w-full h-11 rounded-xl border border-charcoal-700 bg-charcoal-800 px-3 text-sm text-white placeholder-charcoal-400 outline-none focus:border-teal-500 focus:bg-charcoal-900 transition";
-
-const labelClass = "block text-xs font-medium text-charcoal-300 uppercase tracking-wide";
-
-export default function SignUpPage() {
+export default function Page() {
   const supabase = createClient();
   const router = useRouter();
 
-  const [accountType, setAccountType] = useState<AccountType>("customer");
-
-  // shared
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  // customer only
-  const [phone, setPhone] = useState("");
-  const [ssn, setSsn] = useState("");
-
-  // manager only
-  const [employeeId, setEmployeeId] = useState("");
-
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [checkEmail, setCheckEmail] = useState(false);
+  const [message, setMessage] = useState("");
+  const [signupSuccess, setSignupSuccess] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setMessage("");
 
-    const validationError = validate(accountType, {
-      firstName,
-      lastName,
-      email,
-      phone,
-      ssn,
-      employeeId,
-      password,
-      confirmPassword,
-    });
-    if (validationError) {
-      setError(validationError);
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
       return;
     }
 
     setLoading(true);
 
-    const metadata: Record<string, string> = {
-      role: accountType,
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-    };
-
-    if (accountType === "customer") {
-      metadata.phone_number = phone.trim();
-      metadata.tax_id = ssn.replace(/\D/g, "");
-    } else {
-      metadata.employee_id = employeeId.trim();
-    }
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim(),
+    const { error } = await supabase.auth.signUp({
+      email,
       password,
-      options: { data: metadata },
     });
 
-    setLoading(false);
-
-    if (signUpError) {
-      setError(signUpError.message);
+    if (error) {
+      setMessage(error.message);
+      setLoading(false);
       return;
     }
 
-    // If session exists, user is auto-logged in (email confirm disabled)
-    if (data.session) {
-      router.push("/dashboard");
-    } else {
-      // Email confirmation required
-      setCheckEmail(true);
-    }
-  }
+    await supabase.auth.signOut();
+    setSignupSuccess(true);
+    setLoading(false);
+  };
 
-  if (checkEmail) {
+  if (signupSuccess) {
     return (
-      <div className="dark min-h-screen bg-charcoal-950 flex items-center justify-center px-4">
-        <div className="w-full max-w-md text-center">
-          <div className="rounded-2xl border border-charcoal-700 bg-charcoal-900 p-10 shadow-xl">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-teal-500/10">
-              <Landmark className="h-6 w-6 text-teal-400" />
+      <div className="dark min-h-svh bg-[#050816] text-white">
+        <div className="flex min-h-svh items-center justify-center px-6">
+          <div className="w-full max-w-md">
+            <div className="mb-6 flex items-center justify-center gap-2">
+              <Landmark className="h-5 w-5 text-cyan-400" />
+              <span className="text-xl font-semibold">
+                Vitality <span className="text-cyan-400">Bank</span>
+              </span>
             </div>
-            <h2 className="text-lg font-semibold text-white">Check your email</h2>
-            <p className="mt-2 text-sm text-charcoal-400">
-              We sent a confirmation link to <span className="text-white">{email}</span>.
-              Click it to activate your account, then sign in.
-            </p>
-            <Link
-              href="/auth/login"
-              className="mt-6 inline-block w-full rounded-xl bg-teal-500 py-2.5 text-sm font-medium text-white hover:bg-teal-400 transition text-center"
-            >
-              Go to Sign In
-            </Link>
+
+            <Card className="border border-white/10 bg-white/5 shadow-[0_0_40px_-12px_rgba(34,211,238,0.25)] backdrop-blur">
+              <CardHeader className="text-center">
+                <div className="mb-2 flex justify-center">
+                  <CheckCircle2 className="h-12 w-12 text-cyan-400" />
+                </div>
+                <CardTitle className="text-3xl text-white">
+                  Signup Successful
+                </CardTitle>
+                <CardDescription className="text-white/60">
+                  Your account has been created successfully.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                <p className="text-center text-sm text-white/70">
+                  You can now sign in to access your Vitality Bank account.
+                </p>
+
+                <button
+                  onClick={() => router.push("/auth/login")}
+                  className="w-full rounded-xl bg-cyan-400 py-3 font-semibold text-black transition hover:bg-cyan-300"
+                >
+                  Go to Login
+                </button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -149,190 +96,96 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="dark min-h-screen bg-charcoal-950 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,hsl(174_72%_42%_/_0.12),transparent_70%)] flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <Landmark className="h-5 w-5 text-teal-400" />
-          <span className="text-lg font-semibold text-white">
-            Vitality <span className="text-teal-400">Bank</span>
-          </span>
-        </div>
-
-        <div className="rounded-2xl border border-charcoal-700 bg-charcoal-900 shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="px-8 pt-8 pb-4">
-            <h1 className="text-xl font-semibold text-white">Create Account</h1>
-            <p className="mt-1 text-sm text-charcoal-400">
-              Open your Vitality Bank account today.
-            </p>
-
-            {/* Toggle */}
-            <div className="mt-5 flex rounded-xl border border-charcoal-700 bg-charcoal-800 p-1">
-              <button
-                type="button"
-                onClick={() => { setAccountType("customer"); setError(null); }}
-                className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-                  accountType === "customer"
-                    ? "bg-teal-500 text-white shadow"
-                    : "text-charcoal-400 hover:text-white"
-                }`}
-              >
-                Customer
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAccountType("manager"); setError(null); }}
-                className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-                  accountType === "manager"
-                    ? "bg-teal-500 text-white shadow"
-                    : "text-charcoal-400 hover:text-white"
-                }`}
-              >
-                Manager
-              </button>
-            </div>
+    <div className="dark min-h-svh bg-[#050816] text-white">
+      <div className="flex min-h-svh items-center justify-center px-6">
+        <div className="w-full max-w-md">
+          <div className="mb-6 flex items-center justify-center gap-2">
+            <Landmark className="h-5 w-5 text-cyan-400" />
+            <span className="text-xl font-semibold">
+              Vitality <span className="text-cyan-400">Bank</span>
+            </span>
           </div>
 
-          {/* Form */}
-          <form onSubmit={onSubmit} className="px-8 pb-8 space-y-4">
-            {error && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                {error}
-              </div>
-            )}
+          <Card className="border border-white/10 bg-white/5 shadow-[0_0_40px_-12px_rgba(34,211,238,0.25)] backdrop-blur">
+            <CardHeader>
+              <CardTitle className="text-3xl text-white">
+                Create Account
+              </CardTitle>
+              <CardDescription className="text-white/60">
+                Open your Vitality Bank account today.
+              </CardDescription>
+            </CardHeader>
 
-            {/* Name row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>First Name</label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Jane"
-                  className={inputClass}
-                  required
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Last Name</label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Smith"
-                  className={inputClass}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className={labelClass}>Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className={inputClass}
-                required
-              />
-            </div>
-
-            {/* Customer-specific fields */}
-            {accountType === "customer" && (
-              <>
-                <div>
-                  <label className={labelClass}>Phone Number</label>
+            <CardContent>
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wide text-white/70">
+                    Email
+                  </label>
                   <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(555) 867-5309"
-                    className={inputClass}
+                    type="email"
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                   />
                 </div>
-                <div>
-                  <label className={labelClass}>
-                    SSN / Tax ID
-                    <span className="ml-1 normal-case text-charcoal-500">(9 digits)</span>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wide text-white/70">
+                    Password
                   </label>
                   <input
                     type="password"
-                    value={ssn}
-                    onChange={(e) => setSsn(e.target.value)}
-                    placeholder="•••-••-••••"
-                    maxLength={11}
-                    className={inputClass}
+                    placeholder="Enter your password"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     required
-                    autoComplete="off"
                   />
                 </div>
-              </>
-            )}
 
-            {/* Manager-specific fields */}
-            {accountType === "manager" && (
-              <div>
-                <label className={labelClass}>Employee ID</label>
-                <input
-                  type="text"
-                  value={employeeId}
-                  onChange={(e) => setEmployeeId(e.target.value)}
-                  placeholder="EMP0042"
-                  className={inputClass}
-                  required
-                />
-              </div>
-            )}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wide text-white/70">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Re-enter your password"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
 
-            {/* Password */}
-            <div>
-              <label className={labelClass}>
-                Password
-                <span className="ml-1 normal-case text-charcoal-500">(min 8 chars)</span>
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-                required
-              />
-            </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-xl bg-cyan-400 py-3 font-semibold text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? "Creating..." : "Create Account"}
+                </button>
 
-            <div>
-              <label className={labelClass}>Confirm Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className={inputClass}
-                required
-              />
-            </div>
+                {message && (
+                  <p className="text-center text-sm text-red-400">
+                    {message}
+                  </p>
+                )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 w-full h-11 rounded-xl bg-teal-500 text-sm font-semibold text-white hover:bg-teal-400 transition disabled:opacity-60"
-            >
-              {loading ? "Creating account..." : "Create Account"}
-            </button>
-
-            <p className="text-center text-sm text-charcoal-400">
-              Already have an account?{" "}
-              <Link
-                href="/auth/login"
-                className="text-teal-400 hover:text-teal-300 hover:underline"
-              >
-                Sign in
-              </Link>
-            </p>
-          </form>
+                <p className="text-center text-sm text-white/60">
+                  Already have an account?{" "}
+                  <Link
+                    href="/auth/login"
+                    className="font-medium text-cyan-400 hover:underline"
+                  >
+                    Sign in
+                  </Link>
+                </p>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
