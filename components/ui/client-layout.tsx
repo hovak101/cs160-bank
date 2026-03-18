@@ -2,58 +2,44 @@
 
 import { useState } from "react";
 import Sidebar from "./sidebar";
-import { Menu, X } from "lucide-react";
+import { Menu, Bell } from "lucide-react";
 import { LogoutButton } from "@/components/logout-button";
 
-export default function ClientLayout({
-  children,
-  email,
-}: {
-  children: React.ReactNode;
-  email: string;
-}) {
+export default function ClientLayout({ children, email }: { children: React.ReactNode; email: string }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar open={open} />
+    <div className="relative flex h-screen bg-[#0b1220] overflow-hidden text-slate-100">
+      
+      {/* Sidebar Component */}
+      <Sidebar open={open} setOpen={setOpen} />
 
-      {/* Overlay */}
+      {/* Dimmed Background Overlay */}
       {open && (
-        <div
-          className="fixed inset-0 bg-black/30 z-40"
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[50] transition-opacity duration-300"
           onClick={() => setOpen(false)}
         />
       )}
 
-      <div className="flex-1 flex flex-col relative z-10">
-        <div className="h-14 bg-white shadow-md">
-          <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
-            
-            <div className="flex items-center gap-3">
-              <button onClick={() => setOpen(!open)}>
-                {open ? (
-                  <X className="w-6 h-6 transparent" />
-                ) : (
-                  <Menu className="w-6 h-6 text-gray-600" />
-                )}
-              </button>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col relative overflow-hidden">
+        <header className="h-20 border-b border-white/5 bg-[#0b1220]/50 backdrop-blur-md flex items-center justify-between px-8 shrink-0">
+          <button onClick={() => setOpen(true)} className="text-white p-2 hover:bg-white/5 rounded-lg transition-colors">
+            <Menu size={24} />
+          </button>
 
-              <span className="font-semibold text-gray-900">
-                Vitality <span className="text-teal-500">Bank</span>
-              </span>
+          <div className="ml-auto flex items-center gap-6">
+            <button className="text-slate-400 hover:text-white"><Bell size={20} /></button>
+            <div className="hidden sm:block text-right">
+              <p className="text-xs text-slate-500 font-medium">{email}</p>
             </div>
-
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-500">{email}</span>
-              <LogoutButton variant="ghost" />
-            </div>
+            <LogoutButton />
           </div>
-        </div>
+        </header>
 
-        <main className="flex-1 bg-slate-50 overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-6 py-6">
+        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+          <div className="max-w-7xl mx-auto">
             {children}
           </div>
         </main>

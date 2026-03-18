@@ -7,59 +7,59 @@ import {
   Users,
   ArrowRightLeft,
   Send,
-  Download,
-  FileText,
   Settings,
+  Landmark,
+  X
 } from "lucide-react";
 
-const menuItems = [
-  { name: "Dashboard", icon: LayoutDashboard, href: "/customer/dashboard" },
-  { name: "Customer Accounts", icon: Users, href: "/customer/accounts" },
-  { name: "Transactions", icon: ArrowRightLeft, href: "/customer/transactions" },
-  { name: "Transfers", icon: Send, href: "/customer/transfers" },
-  { name: "Deposits", icon: Download, href: "/customer/deposits" },
-  { name: "Withdrawals", icon: Download, href: "/customer/withdrawals" },
-  { name: "Reports", icon: FileText, href: "/customer/reports" },
-  { name: "Settings", icon: Settings, href: "/customer/settings" },
-];
-
-export default function Sidebar({ open }: { open: boolean }) {
+export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const pathname = usePathname();
 
+  const menuItems = [
+    { name: "Dashboard", icon: LayoutDashboard, href: "/customer/dashboard" },
+    { name: "Accounts", icon: Users, href: "/customer/accounts" },
+    { name: "Transactions", icon: ArrowRightLeft, href: "/customer/transactions" },
+    { name: "Transfers", icon: Send, href: "/customer/transfers" },
+    { name: "Settings", icon: Settings, href: "/customer/settings" },
+  ];
+
   return (
-    <div
-      className={`fixed top-0 left-0 h-full w-64 bg-[#0f172a] text-white
-      transform transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] z-50
+    <aside
+      className={`fixed inset-y-0 left-0 w-72 bg-[#0f172a] border-r border-white/10 z-[60] 
+      transform transition-transform duration-300 ease-in-out
       ${open ? "translate-x-0" : "-translate-x-full"}`}
     >
-      {/* Logo */}
-      <div className="p-4 text-teal-400 font-semibold text-lg">
-        Vitality Bank
+      <div className="p-8 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-2 shadow-[0_0_20px_-5px_#22d3ee]">
+            <Landmark className="h-5 w-5 text-cyan-400" />
+          </div>
+          <span className="text-white font-bold text-xl">Vitality <span className="text-cyan-400">Bank</span></span>
+        </div>
+        
+        {/* Close Button for Mobile/Overlay mode */}
+        <button onClick={() => setOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
+          <X size={20} />
+        </button>
       </div>
 
-      {/* Menu */}
-      <nav className="flex flex-col gap-2 px-2">
-        {menuItems.map((item, i) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-
-          return (
-            <Link
-              key={i}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition
-                ${
-                  isActive
-                    ? "bg-teal-500/20 text-teal-400"
-                    : "hover:bg-teal-500/10 hover:text-teal-400"
-                }`}
-            >
-              <Icon size={20} />
-              <span>{item.name}</span>
-            </Link>
-          );
-        })}
+      <nav className="flex flex-col gap-1.5 px-4 mt-4">
+        {menuItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => setOpen(false)} // Close sidebar when a link is clicked
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all
+              ${pathname === item.href
+                  ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-100"
+              }`}
+          >
+            <item.icon size={18} />
+            <span className="font-medium text-sm">{item.name}</span>
+          </Link>
+        ))}
       </nav>
-    </div>
+    </aside>
   );
 }
