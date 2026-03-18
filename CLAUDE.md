@@ -21,11 +21,10 @@ This is a banking application for a bank called **Vitality**. Built with Next.js
 - **SQL / RLS policies**: `supabase/` directory
 
 ### Database Migrations
-When adding a new migration SQL file under `supabase/`, always remind the user to run:
-```
-npx supabase db push
-```
-to apply the migration to the linked Supabase project.
+1. Generate a new migration sql file with `npx supabase migration new <descriptive name>`
+2. write the necessary sql ddl directly into the newly generated sql file:
+3. run `npx supabase db push`
+4. finally, update the types with `npx supabase gen types typescript --project-id lgzxntnltcmtdzcmlvra > types/database.types.ts` to verify that the changes went through. 
 
 ## Architecture & Code Organization
 

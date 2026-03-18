@@ -62,6 +62,15 @@ CREATE TYPE "public"."account_status" AS ENUM (
 ALTER TYPE "public"."account_status" OWNER TO "postgres";
 
 
+CREATE TYPE "public"."account_type" AS ENUM (
+    'credit',
+    'checking'
+);
+
+
+ALTER TYPE "public"."account_type" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."billschedule_status" AS ENUM (
     'active',
     'paused',
@@ -220,18 +229,48 @@ ALTER FUNCTION "public"."handle_new_auth_user"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-begin
+DECLARE
+  v_role public.role;
+BEGIN
+  v_role := COALESCE(
+    (new.raw_user_meta_data->>'role')::public.role,
+    'customer'
+  );
 
-insert into public.users (user_id, email, role, is_active)
-values (new.id, new.email, 'customer', true);
+  INSERT INTO public.users (user_id, email, role, is_active, mfa_enabled, failed_login_attempts, created_at)
+  VALUES (new.id, new.email, v_role, true, false, 0, now())
+  ON CONFLICT (user_id) DO NOTHING;
 
-insert into public.customers (user_id, country)
-values (new.id, 'USA');
+  IF v_role = 'customer' THEN
+    INSERT INTO public.customers (
+      user_id, first_name, last_name, phone_number, tax_id,
+      country, kyc_status, created_at
+    )
+    VALUES (
+      new.id,
+      new.raw_user_meta_data->>'first_name',
+      new.raw_user_meta_data->>'last_name',
+      new.raw_user_meta_data->>'phone_number',
+      new.raw_user_meta_data->>'tax_id',
+      'USA', 'pending', now()
+    )
+    ON CONFLICT (user_id) DO NOTHING;
+  ELSIF v_role = 'manager' THEN
+    INSERT INTO public.managers (user_id, first_name, last_name, employee_id, created_at)
+    VALUES (
+      new.id,
+      new.raw_user_meta_data->>'first_name',
+      new.raw_user_meta_data->>'last_name',
+      new.raw_user_meta_data->>'employee_id',
+      now()
+    )
+    ON CONFLICT (user_id) DO NOTHING;
+  END IF;
 
-return new;
-
-end;
+  RETURN new;
+END;
 $$;
 
 
@@ -240,6 +279,57 @@ ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."accounts" (
+    "account_id" "uuid" NOT NULL,
+    "customer_id" "uuid" NOT NULL,
+    "account_name" character varying(100) NOT NULL,
+    "account_number" character varying(50) NOT NULL,
+    "account_type" "public"."account_type" NOT NULL,
+    "balance" numeric(15,2) DEFAULT 0.00 NOT NULL,
+    "currency" character varying(10) NOT NULL,
+    "status" "public"."account_status" DEFAULT 'active'::"public"."account_status" NOT NULL,
+    "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE "public"."accounts" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."customers" (
+    "customer_id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "first_name" character varying,
+    "last_name" character varying,
+    "phone_number" character varying,
+    "tax_id" character varying,
+    "country" character varying DEFAULT 'USA'::character varying,
+    "kyc_status" "public"."kyc_status" DEFAULT 'pending'::"public"."kyc_status",
+    "address_line_1" character varying,
+    "address_line_2" character varying,
+    "city" character varying,
+    "state" character varying,
+    "zip_code" character varying,
+    "created_at" timestamp without time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."customers" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."managers" (
+    "manager_id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "first_name" character varying,
+    "last_name" character varying,
+    "employee_id" character varying,
+    "created_at" timestamp without time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."managers" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."users" (
@@ -260,6 +350,41 @@ CREATE TABLE IF NOT EXISTS "public"."users" (
 ALTER TABLE "public"."users" OWNER TO "postgres";
 
 
+ALTER TABLE ONLY "public"."accounts"
+    ADD CONSTRAINT "accounts_account_number_key" UNIQUE ("account_number");
+
+
+
+ALTER TABLE ONLY "public"."accounts"
+    ADD CONSTRAINT "accounts_pkey" PRIMARY KEY ("account_id");
+
+
+
+ALTER TABLE ONLY "public"."customers"
+    ADD CONSTRAINT "customers_pkey" PRIMARY KEY ("customer_id");
+
+
+
+ALTER TABLE ONLY "public"."customers"
+    ADD CONSTRAINT "customers_user_id_key" UNIQUE ("user_id");
+
+
+
+ALTER TABLE ONLY "public"."managers"
+    ADD CONSTRAINT "managers_employee_id_key" UNIQUE ("employee_id");
+
+
+
+ALTER TABLE ONLY "public"."managers"
+    ADD CONSTRAINT "managers_pkey" PRIMARY KEY ("manager_id");
+
+
+
+ALTER TABLE ONLY "public"."managers"
+    ADD CONSTRAINT "managers_user_id_key" UNIQUE ("user_id");
+
+
+
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_email_key" UNIQUE ("email");
 
@@ -270,8 +395,59 @@ ALTER TABLE ONLY "public"."users"
 
 
 
+ALTER TABLE ONLY "public"."customers"
+    ADD CONSTRAINT "customers_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("user_id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."accounts"
+    ADD CONSTRAINT "fk_customer" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("customer_id");
+
+
+
+ALTER TABLE ONLY "public"."managers"
+    ADD CONSTRAINT "managers_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("user_id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+CREATE POLICY "Customer can create own account" ON "public"."accounts" FOR INSERT WITH CHECK (("customer_id" IN ( SELECT "customers"."customer_id"
+   FROM "public"."customers"
+  WHERE ("customers"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Customer can update own account" ON "public"."accounts" FOR UPDATE USING (("customer_id" IN ( SELECT "customers"."customer_id"
+   FROM "public"."customers"
+  WHERE ("customers"."user_id" = "auth"."uid"())))) WITH CHECK (("customer_id" IN ( SELECT "customers"."customer_id"
+   FROM "public"."customers"
+  WHERE ("customers"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Customer can view own accounts" ON "public"."accounts" FOR SELECT USING (("customer_id" IN ( SELECT "customers"."customer_id"
+   FROM "public"."customers"
+  WHERE ("customers"."user_id" = "auth"."uid"()))));
+
+
+
+CREATE POLICY "Customers can update own row" ON "public"."customers" FOR UPDATE USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Customers can view own row" ON "public"."customers" FOR SELECT USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Managers can update own row" ON "public"."managers" FOR UPDATE USING (("user_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Managers can view own row" ON "public"."managers" FOR SELECT USING (("user_id" = "auth"."uid"()));
 
 
 
@@ -281,6 +457,15 @@ CREATE POLICY "Users can update own user row" ON "public"."users" FOR UPDATE USI
 
 CREATE POLICY "Users can view own user row" ON "public"."users" FOR SELECT USING (("user_id" = "auth"."uid"()));
 
+
+
+ALTER TABLE "public"."accounts" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."customers" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."managers" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
@@ -472,6 +657,24 @@ GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
 
 
 
+
+
+
+GRANT ALL ON TABLE "public"."accounts" TO "anon";
+GRANT ALL ON TABLE "public"."accounts" TO "authenticated";
+GRANT ALL ON TABLE "public"."accounts" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."customers" TO "anon";
+GRANT ALL ON TABLE "public"."customers" TO "authenticated";
+GRANT ALL ON TABLE "public"."customers" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."managers" TO "anon";
+GRANT ALL ON TABLE "public"."managers" TO "authenticated";
+GRANT ALL ON TABLE "public"."managers" TO "service_role";
 
 
 

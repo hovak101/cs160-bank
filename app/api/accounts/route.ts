@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         return NextResponse.json({error: "Unauthorized"}, {status: 401});
     }
 
-    const {currency, account_name} = await request.json();
+    const {currency, account_name, account_type} = await request.json();
 
     let account_number: string;
 
@@ -69,17 +69,15 @@ export async function POST(request: Request) {
         return NextResponse.json({error: "Customer not found"}, {status: 404});
     }
 
-    const {account_type} = await request.json();
-    
     const {data: newAccount, error: createError} = await supabase
         .from("accounts")
         .insert({
-            customer_id: customer.customer_id,
             account_name, 
             account_number,
             account_type,
             balance: 0,
             currency: currency ?? "USD",
+            customer_id: customer.customer_id,
             status: "active",
         })
         .select("*")

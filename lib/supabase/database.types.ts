@@ -53,7 +53,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          account_id: string
+          account_id?: string
           account_name: string
           account_number: string
           account_type: Database["public"]["Enums"]["account_type"]
@@ -76,15 +76,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["account_status"]
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_customer"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["customer_id"]
-          },
-        ]
+        Relationships: []
       }
       customers: {
         Row: {
