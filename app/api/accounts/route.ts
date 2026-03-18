@@ -1,116 +1,74 @@
-import {NextResponse} from "next/server";
-import {createClient} from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-    const supabase = await createClient();
-
-    const {
-        data: {user},
-        error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-        return NextResponse.json({error: "Unauthorized"}, {status: 401});
-    }
-    
-    const {data: customer, error: customerError} = await supabase
-        .from("customers")
-        .select("customer_id")
-        .eq("user_id", user.id)
-        .single();
-
-    if (customerError || !customer) {
-        return NextResponse.json({error: "Customer not found"}, {status: 404});
-    }
-
-    const {data: accounts, error: accountsError} = await supabase
-        .from("accounts")
-        .select("*")
-        .eq("customer_id", customer.customer_id)
-
-    if (accountsError || !accounts) {
-        return NextResponse.json({error: "Accounts not found"}, {status: 404});
-    }
-
-    return NextResponse.json({accounts});
-}
-    
 export async function POST(request: Request) {
     const supabase = await createClient();
     
-    const {
-        data: {user},
-        error: authError,
-    } = await supabase.auth.getUser();
-
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-        return NextResponse.json({error: "Unauthorized"}, {status: 401});
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const body = await request.json();
+    const { currency, account_name, account_type } = body;
 
-    const {currency, account_name, account_type} = await request.json();
-
-    let account_number: string;
-
-    try{
-        account_number = await generateUniqueAccountNumber(supabase);
-    } catch (error) {
-        return NextResponse.json({error: "Failed to generate unique account number"}, {status: 500});
-    }   
-
-    const {data: customer, error: customerError} = await supabase
+    const { data: customer, error: customerError } = await supabase
         .from("customers")
         .select("customer_id")
         .eq("user_id", user.id)
         .single();
         
     if (customerError || !customer) {
-        return NextResponse.json({error: "Customer not found"}, {status: 404});
+        return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
+    const dbAccountType = (() => {
+        if (!account_type) return "checking";
+        const v = account_type.toString().trim().toLowerCase();
+        if (v.includes("check")) return "checking";
+        if (v.includes("sav")) return "saving";
+        if (v.includes("credit")) return "credit";
+        return "checking";
+    })();
 
-    const {data: newAccount, error: createError} = await supabase
+    let account_number: string;
+    try {
+        account_number = await generateUniqueAccountNumber(supabase);
+    } catch (error) {
+        return NextResponse.json({ error: "Failed to generate account number" }, { status: 500 });
+    }   
+    const { data: newAccount, error: createError } = await supabase
         .from("accounts")
         .insert({
-            account_name, 
+            customer_id: customer.customer_id,
+            account_name: account_name || "New Account", 
             account_number,
-            account_type,
+            account_type: dbAccountType,
             balance: 0,
             currency: currency ?? "USD",
-            customer_id: customer.customer_id,
             status: "active",
         })
         .select("*")
         .single();
 
-    if (createError || !newAccount) {
-        return NextResponse.json({error: "Failed to create account"}, {status: 500});
+    if (createError) {
+        return NextResponse.json({ error: createError.message }, { status: 500 });
     }
 
-    return NextResponse.json(newAccount, {status: 201});    
+    return NextResponse.json(newAccount, { status: 201 });    
 }
 
-async function generateUniqueAccountNumber(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
+async function generateUniqueAccountNumber(supabase: any): Promise<string> {
   let attempts = 0;
   while(attempts < 10) {
-    const candidate = generateAccountNumber();
+    const candidate = Math.floor(1000000000 + Math.random() * 9000000000).toString();
     const { data: existing } = await supabase
       .from("accounts")
       .select("account_number")
       .eq("account_number", candidate)
       .maybeSingle();
-
-    if (!existing) {
-      return candidate;
-    }
+    if (!existing) return candidate;
     attempts++;
   }
   throw new Error("Could not generate unique account number");
-}
-
-// Simple account number generator using timestamp and random string
-function generateAccountNumber(): string {
-  const timestamp = Date.now().toString().slice(-8);
-  const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-  return `${timestamp}${random}`;
 }
