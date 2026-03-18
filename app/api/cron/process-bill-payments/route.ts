@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 // this runs every day at 8am via vercel cron
 // it finds all payments that are due and processes them
-export async function POST(request) {
+export async function POST(request: Request) {
 
   // // make sure only vercel cron can call this, not just anyone
   // let authHeader = request.headers.get("authorization");
@@ -12,8 +12,8 @@ export async function POST(request) {
   // }
 
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   // get todays date
@@ -39,7 +39,7 @@ export async function POST(request) {
   return NextResponse.json({ message: `Processed payments.` });
 }
 
-async function processOnePayment(supabase, schedule, today) {
+async function processOnePayment(supabase: any, schedule: any, today: string) {
 
   // if the schedule is past its end date, mark it as done
   if (schedule.end_date && schedule.end_date < today) {
@@ -145,14 +145,14 @@ async function processOnePayment(supabase, schedule, today) {
 }
 
 // sets a schedule status to cancelled
-async function cancelSchedule(supabase, scheduleId) {
+async function cancelSchedule(supabase: any, scheduleId: string) {
   await supabase
     .from("bill_schedules")
     .update({ status: "cancelled" })
     .eq("schedule_id", scheduleId);
 }
 
-function getNextDate(currentDate, frequency) {
+function getNextDate(currentDate: string, frequency: string) {
   let date = new Date(currentDate);
 
   if (frequency === "weekly")    date.setDate(date.getDate() + 7);
