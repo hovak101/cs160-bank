@@ -1,10 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import DashboardLayout from "@/components/ui/dashboard-layout";
+import ClientLayout from "./client-layout";
 
-export const dynamic = "force-dynamic";
-
-export default async function CustomerLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -17,13 +15,13 @@ export default async function CustomerLayout({
 
   if (!user) redirect("/auth/login");
 
-  const { data } = await supabase
+  const { data: userData } = await supabase
     .from("users")
-    .select("role")
+    .select("email")
     .eq("user_id", user.id)
     .single();
 
-  if (data?.role !== "customer") redirect("/auth/login");
+  const email = userData?.email ?? user.email ?? "";
 
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return <ClientLayout email={email}>{children}</ClientLayout>;
 }
