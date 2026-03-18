@@ -1,18 +1,55 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Wallet, ArrowLeftRight, CreditCard, MapPin, ScanLine } from "lucide-react";
+import { Landmark, Wallet, ArrowLeftRight, CreditCard, MapPin, ScanLine } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-
+import { LogoutButton } from "@/components/logout-button";
+export const dynamic = "force-dynamic";
 const quickActions = [
-  { title: "Accounts", description: "View balances.", href: "/customer/accounts", icon: Wallet, badge: "Core" },
-  { title: "Transactions", description: "Track history.", href: "/customer/transactions", icon: ArrowLeftRight, badge: "Core" },
-  { title: "Bill Pay", description: "Manage payments.", href: "/customer/bill-pay", icon: CreditCard, badge: "Planned" },
+  {
+    title: "Accounts",
+    description: "View balances, account details, and recent activity.",
+    href: "/customer/accounts",
+    icon: Wallet,
+    badge: "Core",
+  },
+  {
+    title: "Transactions",
+    description: "Track deposits, withdrawals, and transfer history.",
+    href: "/customer/transactions",
+    icon: ArrowLeftRight,
+    badge: "Core",
+  },
+  {
+    title: "Bill Pay",
+    description: "Manage and schedule payments from checking accounts.",
+    href: "/customer/bill-pay",
+    icon: CreditCard,
+    badge: "Planned",
+  },
+  {
+    title: "Find ATM",
+    description: "Locate the nearest Chase ATM from your current area.",
+    href: "/customer/atm",
+    icon: MapPin,
+    badge: "Planned",
+  },
+  {
+    title: "Cheque Deposit",
+    description: "Deposit a cheque using your camera or screenshot upload.",
+    href: "/customer/deposit-cheque",
+    icon: ScanLine,
+    badge: "Planned",
+  },
 ];
 
 export default async function CustomerDashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) redirect("/auth/login");
 
   const { data: customer } = await supabase
@@ -21,9 +58,13 @@ export default async function CustomerDashboardPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const displayName = [customer?.first_name, customer?.last_name].filter(Boolean).join(" ") || "Customer";
+  const displayName =
+    [customer?.first_name, customer?.last_name].filter(Boolean).join(" ") ||
+    user.email ||
+    "Customer";
 
   return (
+    
     <div className="space-y-8">
       {/* Welcome Banner */}
       <section className="rounded-[32px] border border-white/10 bg-[#0f172a] p-8 shadow-2xl relative overflow-hidden">
