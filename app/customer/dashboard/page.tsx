@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Landmark, LayoutDashboard } from "lucide-react";
+import { Landmark, LayoutDashboard, MapPin } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 import { LogoutButton } from "@/components/logout-button";
@@ -60,6 +61,14 @@ export default async function CustomerDashboardPage() {
               <p className="mt-1 text-xs text-slate-400">Coming soon</p>
             </div>
           ))}
+          <Link
+            href="/customer/dashboard/find-atm"
+            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-[0_0_40px_-8px_hsl(174_72%_42%_/_0.25)] transition"
+          >
+            <MapPin className="h-5 w-5 text-teal-500 mb-3" />
+            <p className="font-medium text-slate-800">Find Nearest ATM</p>
+            <p className="mt-1 text-xs text-slate-400">Locate Chase ATMs near you</p>
+          </Link>
         </div>
       </main>
     </>
