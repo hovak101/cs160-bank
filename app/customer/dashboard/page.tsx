@@ -30,7 +30,7 @@ const quickActions = [
   {
     title: "Find ATM",
     description: "Locate the nearest Chase ATM from your current area.",
-    href: "/customer/atm",
+    href: "/customer/dashboard/find-atm",
     icon: MapPin,
     badge: "Planned",
   },
@@ -98,6 +98,7 @@ export default async function CustomerDashboardPage() {
               </Card>
             </Link>
           ))}
+
         </div>
       </section>
     </div>
