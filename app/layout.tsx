@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import DashboardLayout from "@/components/ui/dashboard-layout";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -9,7 +10,10 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Vitality Bank — Your Money, Reimagined",
+  title: {
+    default: "Vitality Bank — Your Money, Reimagined",
+    template: "%s | Vitality Bank",
+  },
   description:
     "FDIC-insured checking and credit accounts with no hidden fees and instant notifications.",
 };

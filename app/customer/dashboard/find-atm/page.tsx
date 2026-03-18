@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Landmark, MapPin, Navigation } from "lucide-react";
+import { MapPin, Navigation, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import Link from "next/link";
 
 type ATMResult = {
@@ -83,81 +84,82 @@ export default function FindATMPage() {
   }, [userLocation]);
 
   return (
-    <>
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-slate-800">
-            <Landmark className="h-5 w-5 text-teal-500" />
-            Vitality <span className="text-teal-500">Bank</span>
-          </div>
-          <Link href="/customer/dashboard" className="text-sm text-teal-600 hover:underline">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <Link
+            href="/customer/dashboard"
+            className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors mb-3"
+          >
+            <ArrowLeft size={16} />
             Back to Dashboard
           </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-slate-900">Find Nearest Chase ATM</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-3xl font-bold text-white tracking-tight">Find Nearest Chase ATM</h1>
+          <p className="mt-1 text-sm text-slate-400">
             {geoFailed
               ? "Enter a zip code or city to find nearby Chase ATMs"
               : "Showing Chase ATMs near your current location"}
           </p>
         </div>
+      </div>
 
-        <div className="mb-6 flex gap-2">
-          <Input
-            placeholder="Enter zip code or city"
-            value={zipCode}
-            onChange={(e) => setZipCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && searchByZip()}
-            className="max-w-xs text-slate-800"
-          />
-          <Button onClick={searchByZip} className="bg-teal-600 hover:bg-teal-700">
-            Search
-          </Button>
-        </div>
+      {/* Search */}
+      <div className="flex gap-3">
+        <Input
+          placeholder="Enter zip code or city"
+          value={zipCode}
+          onChange={(e) => setZipCode(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && searchByZip()}
+          className="max-w-xs bg-[#0f172a] border-white/10 text-white placeholder:text-slate-500 focus:border-cyan-400/50"
+        />
+        <Button onClick={searchByZip} className="bg-teal-600 hover:bg-teal-700 text-white">
+          Search
+        </Button>
+      </div>
 
-        {loading && <p className="text-sm text-slate-400">Searching for nearby ATMs…</p>}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      {/* Loading / Error */}
+      {loading && <p className="text-sm text-slate-400">Searching for nearby ATMs…</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
 
-        {!loading && atms.length > 0 && (
-          <div className="space-y-3">
-            {atms.map((atm, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-[0_0_40px_-8px_hsl(174_72%_42%_/_0.25)] transition"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <MapPin className="h-4 w-4 text-teal-500" />
-                      <p className="font-medium text-slate-800">{atm.name}</p>
+      {/* Results */}
+      {!loading && atms.length > 0 && (
+        <div className="space-y-3">
+          {atms.map((atm, i) => (
+            <Card
+              key={i}
+              className="bg-[#0f172a] border-white/10 hover:border-cyan-400/50 transition-all p-5"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="p-2 rounded-lg bg-cyan-400/10 text-cyan-400">
+                      <MapPin size={16} />
                     </div>
-                    <p className="text-sm text-slate-500">{atm.address}</p>
-                    <p className="text-xs text-slate-400 mt-1">{atm.distance} away</p>
+                    <p className="font-semibold text-white">{atm.name}</p>
                   </div>
-                  <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${atm.lat},${atm.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button variant="ghost" size="sm" className="text-teal-600">
-                      <Navigation className="h-4 w-4 mr-1" />
-                      Directions
-                    </Button>
-                  </a>
+                  <p className="text-sm text-slate-400 ml-10">{atm.address}</p>
+                  <p className="text-xs text-slate-500 mt-1 ml-10">{atm.distance} away</p>
                 </div>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${atm.lat},${atm.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10">
+                    <Navigation size={16} className="mr-1" />
+                    Directions
+                  </Button>
+                </a>
               </div>
-            ))}
-          </div>
-        )}
+            </Card>
+          ))}
+        </div>
+      )}
 
-        {!loading && !error && atms.length === 0 && userLocation && (
-          <p className="text-sm text-slate-400">No Chase ATMs found nearby.</p>
-        )}
-      </main>
-    </>
+      {!loading && !error && atms.length === 0 && userLocation && (
+        <p className="text-sm text-slate-400">No Chase ATMs found nearby.</p>
+      )}
+    </div>
   );
 }
