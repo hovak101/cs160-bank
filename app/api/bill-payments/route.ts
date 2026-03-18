@@ -36,7 +36,7 @@ export async function GET() {
 
   // now get all the schedules that belong to those accounts
   let { data: scheduleList } = await supabase
-    .from("bill_schedules")
+    .from("bill_schedules" as any)
     .select("*")
     .in("account_id", accountIdList)
     .neq("status", "cancelled")
@@ -46,7 +46,7 @@ export async function GET() {
 }
 
 // creates a new bill payment schedule
-export async function POST(request) {
+export async function POST(request: Request) {
   const supabase = await createClient();
 
   let { data: { user } } = await supabase.auth.getUser();
@@ -71,6 +71,11 @@ export async function POST(request) {
     return NextResponse.json({ error: "End date must be after start date." }, { status: 400 });
   }
 
+  const validFrequencies = ["weekly", "biweekly", "monthly", "annually", "once"];
+  if (!validFrequencies.includes(frequency)) {
+    return NextResponse.json({ error: "Invalid frequency." }, { status: 400 });
+  }
+
   // check that the user actually owns the source account
   let { data: customerData } = await supabase
     .from("customers")
@@ -82,7 +87,7 @@ export async function POST(request) {
     .from("accounts")
     .select("account_id, status")
     .eq("account_id", account_id)
-    .eq("customer_id", customerData.customer_id)
+    .eq("customer_id", customerData!.customer_id)
     .single();
 
   if (!sourceAccount) {
@@ -95,7 +100,7 @@ export async function POST(request) {
 
   // save the new schedule to the database
   let { data: newSchedule, error: insertError } = await supabase
-    .from("bill_schedules")
+    .from("bill_schedules" as any)
     .insert({
       account_id: account_id,
       payee_id: payee_account_id,
