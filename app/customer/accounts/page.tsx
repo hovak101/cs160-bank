@@ -31,7 +31,7 @@ export default async function AccountsPage() {
     <main className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Accounts</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Accounts</h1>
           <p className="text-slate-500 text-sm">Manage your banking accounts</p>
         </div>
         <OpenAccountForm />
@@ -47,15 +47,15 @@ export default async function AccountsPage() {
                   <Landmark size={24} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-lg">{acc.account_name}</h3>
-                  <p className="text-xs font-mono text-slate-400">Account #: ••••{acc.account_number.slice(-4)}</p>
+                  <h3 className="font-bold text-white text-lg">{acc.account_name}</h3>
+                  <p className="text-xs font-mono text-white">Account #: ••••{acc.account_number.slice(-4)}</p>
                 </div>
               </div>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Current Balance</p>
-              <p className="text-4xl font-bold text-slate-900">
+              <p className="text-4xl font-bold text-white">
                 {/* Ensure currency symbol matches your currency column if needed */}
                 ${acc.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </p>

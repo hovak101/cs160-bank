@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ReceiptText } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ArrowLeftRight,
+  ReceiptText,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +79,7 @@ export default async function CustomerTransactionsPage() {
   }
 
   const accountMap = new Map(
-    accounts.map((account) => [account.account_id, account])
+    accounts.map((account) => [account.account_id, account] as const)
   );
 
   return (
@@ -89,7 +94,8 @@ export default async function CustomerTransactionsPage() {
             Transactions
           </h1>
           <p className="mt-2 max-w-2xl text-slate-400">
-            Review your deposits, withdrawals, transfers, and recent account activity.
+            Review your deposits, withdrawals, transfers, and recent account
+            activity.
           </p>
         </div>
       </section>
@@ -110,7 +116,8 @@ export default async function CustomerTransactionsPage() {
           <div className="border-b border-white/10 px-6 py-5">
             <h2 className="text-xl font-bold text-white">Transaction History</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Showing {transactions.length} transaction{transactions.length > 1 ? "s" : ""}.
+              Showing {transactions.length} transaction
+              {transactions.length > 1 ? "s" : ""}.
             </p>
           </div>
 
@@ -145,14 +152,17 @@ export default async function CustomerTransactionsPage() {
                       </p>
 
                       <div className="mt-2 space-y-1 text-xs text-slate-500">
+                        <p>Ref: {tx.reference_number || "N/A"}</p>
                         <p>
-                          Ref: {tx.reference_number || "N/A"}
+                          From:{" "}
+                          {formatAccountLabel(tx.source_account_id, accountMap)}
                         </p>
                         <p>
-                          From: {formatAccountLabel(tx.source_account_id, accountMap)}
-                        </p>
-                        <p>
-                          To: {formatAccountLabel(tx.destination_account_id, accountMap)}
+                          To:{" "}
+                          {formatAccountLabel(
+                            tx.destination_account_id,
+                            accountMap
+                          )}
                         </p>
                       </div>
                     </div>
@@ -167,7 +177,11 @@ export default async function CustomerTransactionsPage() {
 
                   <div className="flex flex-col justify-center">
                     <p className="text-sm font-medium text-slate-400">Status</p>
-                    <p className={`mt-1 text-sm font-semibold capitalize ${getStatusColor(tx.status)}`}>
+                    <p
+                      className={`mt-1 text-sm font-semibold capitalize ${getStatusColor(
+                        tx.status
+                      )}`}
+                    >
                       {tx.status || "unknown"}
                     </p>
                   </div>
@@ -234,7 +248,9 @@ function getTransactionDirection(
   tx: Transaction,
   accountMap: Map<string, Account>
 ): "incoming" | "outgoing" | "internal" {
-  const sourceOwned = !!(tx.source_account_id && accountMap.has(tx.source_account_id));
+  const sourceOwned = !!(
+    tx.source_account_id && accountMap.has(tx.source_account_id)
+  );
   const destinationOwned = !!(
     tx.destination_account_id && accountMap.has(tx.destination_account_id)
   );
@@ -254,7 +270,11 @@ function getTransactionIcon(
     return <ArrowDownLeft size={20} />;
   }
 
-  if (normalized === "withdrawal" || normalized === "withdraw" || direction === "outgoing") {
+  if (
+    normalized === "withdrawal" ||
+    normalized === "withdraw" ||
+    direction === "outgoing"
+  ) {
     return <ArrowUpRight size={20} />;
   }
 

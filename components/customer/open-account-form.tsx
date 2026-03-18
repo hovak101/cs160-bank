@@ -76,7 +76,7 @@ export function OpenAccountForm() {
                 <label className="text-sm font-medium text-slate-700 mb-1 block">Account Type</label>
                 <select 
                   name="account_type" 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none bg-white"
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none bg-teal"
                   required
                 >
                   <option value="Checking Account">Checking Account</option>

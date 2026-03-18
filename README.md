@@ -16,7 +16,7 @@
 
    `NEXT_PUBLIC_SUPABASE_ANON_KEY=your_remote_anon_key`
 
-
+   `SUPABASE_SERVICE_ROLE_KEY=the_supabase_service_role_key`
 
 3. **Run the development server:**
 

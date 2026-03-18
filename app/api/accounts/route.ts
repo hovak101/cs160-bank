@@ -22,7 +22,14 @@ export async function POST(request: Request) {
     if (customerError || !customer) {
         return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
-    const dbAccountType = account_type?.toLowerCase().includes("checking") ? "checking" : "checking";
+    const dbAccountType = (() => {
+        if (!account_type) return "checking";
+        const v = account_type.toString().trim().toLowerCase();
+        if (v.includes("check")) return "checking";
+        if (v.includes("sav")) return "saving";
+        if (v.includes("credit")) return "credit";
+        return "checking";
+    })();
 
     let account_number: string;
     try {
@@ -33,7 +40,6 @@ export async function POST(request: Request) {
     const { data: newAccount, error: createError } = await supabase
         .from("accounts")
         .insert({
-            account_id: crypto.randomUUID(), 
             customer_id: customer.customer_id,
             account_name: account_name || "New Account", 
             account_number,

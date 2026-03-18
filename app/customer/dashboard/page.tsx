@@ -42,7 +42,7 @@ const quickActions = [
   {
     title: "Find ATM",
     description: "Locate the nearest Chase ATM from your current area.",
-    href: "/customer/atm",
+    href: "/customer/dashboard/find-atm",
     icon: MapPin,
   },
   {
@@ -141,7 +141,6 @@ export default async function CustomerDashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner */}
       <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
         <div className="pointer-events-none absolute left-1/2 top-0 h-full w-full -translate-x-1/2 bg-[radial-gradient(circle_at_50%_-20%,#22d3ee33,transparent_70%)]" />
         <div className="relative z-10">
@@ -157,7 +156,6 @@ export default async function CustomerDashboardPage() {
         </div>
       </section>
 
-      {/* Metrics */}
       <div className="grid gap-6 md:grid-cols-3">
         <MetricCard
           title="Accounts Overview"
@@ -170,11 +168,8 @@ export default async function CustomerDashboardPage() {
         />
       </div>
 
-      {/* Main Content */}
       <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-        {/* Left */}
         <div className="space-y-6">
-          {/* Banking Account */}
           <Card className="border-white/10 bg-[#0f172a] p-6">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -238,7 +233,6 @@ export default async function CustomerDashboardPage() {
             )}
           </Card>
 
-          {/* Quick Actions */}
           <section>
             <h2 className="mb-6 text-xl font-bold text-white">Quick Actions</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -261,7 +255,6 @@ export default async function CustomerDashboardPage() {
           </section>
         </div>
 
-        {/* Right - Recent Transactions */}
         <div>
           <Card className="border-white/10 bg-[#0f172a] p-6">
             <div className="mb-4 flex items-center justify-between">
