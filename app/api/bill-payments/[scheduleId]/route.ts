@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 // cancels a bill payment schedule
-export async function DELETE(request, { params }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ scheduleId: string }> }) {
   const supabase = await createClient();
 
   let { data: { user } } = await supabase.auth.getUser();
@@ -11,7 +11,7 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   }
 
-  let scheduleId = params.scheduleId;
+  let { scheduleId } = await params;
 
   // set the status to cancelled in the database
   let { error: updateError } = await supabase
