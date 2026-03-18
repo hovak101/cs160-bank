@@ -78,6 +78,59 @@ export type Database = {
         }
         Relationships: []
       }
+      bill_schedules: {
+        Row: {
+          account_id: string | null
+          amount: number | null
+          created_at: string | null
+          currency: string | null
+          end_date: string | null
+          frequency: string | null
+          next_payment_date: string | null
+          nickname: string | null
+          payee_id: string | null
+          schedule_id: string
+          start_date: string | null
+          status: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          amount?: number | null
+          created_at?: string | null
+          currency?: string | null
+          end_date?: string | null
+          frequency?: string | null
+          next_payment_date?: string | null
+          nickname?: string | null
+          payee_id?: string | null
+          schedule_id?: string
+          start_date?: string | null
+          status?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number | null
+          created_at?: string | null
+          currency?: string | null
+          end_date?: string | null
+          frequency?: string | null
+          next_payment_date?: string | null
+          nickname?: string | null
+          payee_id?: string | null
+          schedule_id?: string
+          start_date?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_schedules_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address_line_1: string | null
@@ -169,6 +222,105 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      payment_executions: {
+        Row: {
+          actual_execution_at: string | null
+          execution_id: string
+          failure_reason: string | null
+          retry_count: number | null
+          schedule_id: string | null
+          scheduled_date: string | null
+          status: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          actual_execution_at?: string | null
+          execution_id?: string
+          failure_reason?: string | null
+          retry_count?: number | null
+          schedule_id?: string | null
+          scheduled_date?: string | null
+          status?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          actual_execution_at?: string | null
+          execution_id?: string
+          failure_reason?: string | null
+          retry_count?: number | null
+          schedule_id?: string | null
+          scheduled_date?: string | null
+          status?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_executions_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "bill_schedules"
+            referencedColumns: ["schedule_id"]
+          },
+          {
+            foreignKeyName: "payment_executions_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["transaction_id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          amount: number
+          description: string | null
+          destination_account_id: string | null
+          executed_at: string | null
+          reference_number: string
+          source_account_id: string | null
+          status: string | null
+          transaction_id: string
+          transaction_type: string | null
+        }
+        Insert: {
+          amount: number
+          description?: string | null
+          destination_account_id?: string | null
+          executed_at?: string | null
+          reference_number: string
+          source_account_id?: string | null
+          status?: string | null
+          transaction_id?: string
+          transaction_type?: string | null
+        }
+        Update: {
+          amount?: number
+          description?: string | null
+          destination_account_id?: string | null
+          executed_at?: string | null
+          reference_number?: string
+          source_account_id?: string | null
+          status?: string | null
+          transaction_id?: string
+          transaction_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_destination_account_id_fkey"
+            columns: ["destination_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "transactions_source_account_id_fkey"
+            columns: ["source_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["account_id"]
           },
         ]
       }
