@@ -50,7 +50,7 @@ export function LoginForm() {
       !customer.last_name?.trim();
 
     if (needsOnboarding) {
-      router.push("/customer/onboarding");
+      router.push("/auth/onboarding");
     } else {
       router.push("/dashboard");
     }
