@@ -70,9 +70,9 @@ export default async function CustomerDashboardPage() {
             Vitality <span className="text-teal-500">Bank</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-2 shadow-[0_0_30px_-10px_hsl(174_72%_42%_/_0.35)]">
+            {/* <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-2 shadow-[0_0_30px_-10px_hsl(174_72%_42%_/_0.35)]">
               <Landmark className="h-5 w-5 text-cyan-400" />
-            </div>
+            </div> */}
             {/* <div>
               <p className="text-lg font-semibold tracking-tight">
                 Vitality <span className="text-cyan-400">Bank</span>
