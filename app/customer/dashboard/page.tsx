@@ -41,7 +41,6 @@ export default async function CustomerDashboardPage() {
   const name =
     (user.user_metadata?.first_name as string | undefined) ?? email;
 
-  // Navigation items for the dashboard grid
   const dashboardActions = [
     { 
       name: "Accounts", 
@@ -74,14 +73,14 @@ export default async function CustomerDashboardPage() {
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-2 shadow-[0_0_30px_-10px_hsl(174_72%_42%_/_0.35)]">
               <Landmark className="h-5 w-5 text-cyan-400" />
             </div>
-            <div>
+            {/* <div>
               <p className="text-lg font-semibold tracking-tight">
                 Vitality <span className="text-cyan-400">Bank</span>
               </p>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                 Customer Portal
               </p>
-            </div>
+            </div> */}
           </div>
 
           <div className="flex items-center gap-4">
