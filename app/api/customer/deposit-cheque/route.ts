@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!amountValue || amountValue <= 0) {
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
       return NextResponse.json(
         { error: "Valid amount is required." },
         { status: 400 }
@@ -77,7 +77,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const newBalance = Number(account.balance || 0) + amountValue;
+    const currentBalance = Number(account.balance || 0);
+    const newBalance = currentBalance + amountValue;
 
     const { error: updateAccountError } = await supabase
       .from("accounts")
@@ -113,22 +114,11 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            transactionError.message || "Balance updated but transaction failed.",
+            transactionError.message ||
+            "Balance updated but transaction failed.",
         },
         { status: 500 }
       );
-    }
-
-    const { error: checkDepositError } = await supabase
-      .from("check_deposits")
-      .insert({
-        account_id: account.account_id,
-        amount: amountValue,
-        status: "completed",
-      });
-
-    if (checkDepositError) {
-      console.error("checkDepositError:", checkDepositError);
     }
 
     revalidatePath("/customer/dashboard");

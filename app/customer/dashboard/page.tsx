@@ -10,7 +10,7 @@ import {
   Banknote,
   PlusCircle,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
@@ -69,10 +69,10 @@ type Transaction = {
   source_account_id: string | null;
   destination_account_id: string | null;
   amount: number;
-  transaction_type: string;
-  status: string;
+  transaction_type: string | null;
+  status: string | null;
   description: string | null;
-  executed_at: string;
+  executed_at: string | null;
 };
 
 export default async function CustomerDashboardPage() {
@@ -105,7 +105,16 @@ export default async function CustomerDashboardPage() {
     .eq("customer_id", customer.customer_id)
     .order("created_at", { ascending: true });
 
-  const accounts: Account[] = accountsData ?? [];
+  const accounts: Account[] = (accountsData ?? []).map((account) => ({
+    account_id: account.account_id,
+    account_name: account.account_name ?? "",
+    account_number: account.account_number ?? "",
+    account_type: account.account_type ?? "",
+    balance: Number(account.balance ?? 0),
+    currency: account.currency ?? "USD",
+    status: account.status ?? "unknown",
+  }));
+
   const accountIds = accounts.map((account) => account.account_id);
 
   let recentTransactions: Transaction[] = [];
@@ -127,7 +136,17 @@ export default async function CustomerDashboardPage() {
       .order("executed_at", { ascending: false })
       .limit(5);
 
-    recentTransactions = transactionsData ?? [];
+    recentTransactions = (transactionsData ?? []).map((tx) => ({
+      transaction_id: tx.transaction_id,
+      reference_number: tx.reference_number ?? "",
+      source_account_id: tx.source_account_id,
+      destination_account_id: tx.destination_account_id,
+      amount: Number(tx.amount ?? 0),
+      transaction_type: tx.transaction_type,
+      status: tx.status,
+      description: tx.description,
+      executed_at: tx.executed_at,
+    }));
   }
 
   const totalBalance = accounts.reduce(
@@ -308,7 +327,7 @@ export default async function CustomerDashboardPage() {
                               : "text-slate-400"
                           }`}
                         >
-                          {tx.status}
+                          {tx.status || "unknown"}
                         </p>
                       </div>
                     </div>
@@ -351,7 +370,8 @@ function formatCurrency(amount: number, currency = "USD") {
   }).format(Number(amount || 0));
 }
 
-function formatDate(dateString: string) {
+function formatDate(dateString: string | null) {
+  if (!dateString) return "No date";
   return new Date(dateString).toLocaleString("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
