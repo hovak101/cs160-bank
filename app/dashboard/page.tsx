@@ -20,5 +20,6 @@ export default async function DashboardRedirect() {
 
   if (data?.role === "customer") redirect("/customer/dashboard");
   if (data?.role === "manager") redirect("/manager/dashboard");
+  if (data?.role === "admin") redirect("/admin/dashboard");
   redirect("/auth/login");
 }
