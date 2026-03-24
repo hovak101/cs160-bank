@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Landmark, Users } from "lucide-react";
+import { Landmark } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 import { LogoutButton } from "@/components/logout-button";
+import { ManagerDashboardStats } from "@/components/manager/dashboard-stats";
 
 export default async function ManagerDashboardPage() {
   const supabase = await createClient();
@@ -25,49 +26,38 @@ export default async function ManagerDashboardPage() {
     (user.user_metadata?.first_name as string | undefined) ?? email;
 
   return (
-    <>
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-slate-800">
-            <Landmark className="h-5 w-5 text-teal-500" />
-            Vitality <span className="text-teal-500">Bank</span>
+    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1a2847] to-[#0f172a]">
+      <header className="border-b border-white/10 bg-[#0f172a]/80 backdrop-blur">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-semibold text-white">
+            <Landmark className="h-5 w-5 text-teal-400" />
+            Vitality <span className="text-teal-400">Bank</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">{email}</span>
+            <span className="text-sm text-slate-400">{email}</span>
             <LogoutButton variant="ghost" />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-10">
-        <div className="mb-8">
-          <p
-            className="text-sm font-medium uppercase tracking-widest"
-            style={{ color: "hsl(12 85% 60%)" }}
-          >
-            Manager Dashboard
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold text-slate-900">
-            Welcome, {name}
-          </h1>
-        </div>
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-10">
+        <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#0f172a] p-8 shadow-2xl mb-8">
+          <div className="pointer-events-none absolute left-1/2 top-0 h-full w-full -translate-x-1/2 bg-[radial-gradient(circle_at_50%_-20%,#22d3ee33,transparent_70%)]" />
+          <div className="relative z-10">
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-teal-400">
+              Manager Dashboard
+            </p>
+            <h1 className="text-4xl font-bold tracking-tight text-white">
+              Welcome, {name}
+            </h1>
+            <p className="mt-2 max-w-xl text-slate-400">
+              Here's an overview of your bank's performance
+            </p>
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {["Customers", "Reports", "Queries"].map((item) => (
-            <div
-              key={item}
-              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-[0_0_40px_-8px_hsl(12_85%_60%_/_0.15)] transition"
-            >
-              <Users
-                className="h-5 w-5 mb-3"
-                style={{ color: "hsl(12 85% 60%)" }}
-              />
-              <p className="font-medium text-slate-800">{item}</p>
-              <p className="mt-1 text-xs text-slate-400">Coming soon</p>
-            </div>
-          ))}
-        </div>
+        <ManagerDashboardStats />
       </main>
-    </>
+    </div>
   );
 }
