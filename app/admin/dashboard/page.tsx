@@ -5,6 +5,7 @@ import { Landmark } from "lucide-react";
 export const dynamic = "force-dynamic";
 import { LogoutButton } from "@/components/logout-button";
 import { ManagerDashboardStats } from "@/components/manager/dashboard-stats";
+import { AddManagerSection } from "@/components/admin/add-manager-section";
 
 export default async function ManagerDashboardPage() {
   const supabase = await createClient();
@@ -57,6 +58,8 @@ export default async function ManagerDashboardPage() {
         </section>
 
         <ManagerDashboardStats />
+
+        <AddManagerSection />
       </main>
     </div>
   );
