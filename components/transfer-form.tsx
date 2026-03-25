@@ -3,11 +3,11 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeftRight,
   Landmark,
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Banknote,
 } from "lucide-react";
 
 type Account = {
@@ -20,20 +20,25 @@ type Account = {
   status: string;
 };
 
-export function WithdrawForm({ accounts }: { accounts: Account[] }) {
+export function TransferForm({ accounts }: { accounts: Account[] }) {
   const router = useRouter();
-  const [selectedAccount, setSelectedAccount] = useState("");
+  const [fromAccount, setFromAccount] = useState("");
+  const [toAccount, setToAccount] = useState("");
   const [amount, setAmount] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const selectedAccountData = useMemo(() => {
-    return accounts.find((account) => account.account_id === selectedAccount);
-  }, [accounts, selectedAccount]);
+  const fromAccountData = useMemo(() => {
+    return accounts.find((account) => account.account_id === fromAccount);
+  }, [accounts, fromAccount]);
 
-  const availableBalance = Number(selectedAccountData?.balance ?? 0);
-  const currency = selectedAccountData?.currency ?? "USD";
+  const toAccountData = useMemo(() => {
+    return accounts.find((account) => account.account_id === toAccount);
+  }, [accounts, toAccount]);
+
+  const availableBalance = Number(fromAccountData?.balance ?? 0);
+  const currency = fromAccountData?.currency ?? "USD";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,8 +47,18 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
 
     const numericAmount = Number(amount);
 
-    if (!selectedAccount) {
-      setError("Please select an account.");
+    if (!fromAccount) {
+      setError("Please select a source account.");
+      return;
+    }
+
+    if (!toAccount) {
+      setError("Please select a destination account.");
+      return;
+    }
+
+    if (fromAccount === toAccount) {
+      setError("Source and destination accounts must be different.");
       return;
     }
 
@@ -53,17 +68,18 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
     }
 
     if (numericAmount > availableBalance) {
-      setError("Insufficient funds. You cannot withdraw more than your current balance.");
+      setError("Insufficient funds. Transfer amount exceeds source account balance.");
       return;
     }
 
     const formData = new FormData();
-    formData.append("account_id", selectedAccount);
+    formData.append("from_account_id", fromAccount);
+    formData.append("to_account_id", toAccount);
     formData.append("amount", amount);
 
     startTransition(async () => {
       try {
-        const res = await fetch("/api/customer/withdraw", {
+        const res = await fetch("/api/customer/transfer", {
           method: "POST",
           body: formData,
         });
@@ -71,25 +87,27 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
         const data = await res.json();
 
         if (!res.ok) {
-          setError(data.error || "Withdrawal failed.");
+          setError(data.error || "Transfer failed.");
           return;
         }
 
         setAmount("");
         router.refresh();
-        setMessage("Withdrawal completed successfully.");
+        setMessage("Transfer completed successfully.");
       } catch {
-        setError("Something went wrong while processing the withdrawal.");
+        setError("Something went wrong while processing the transfer.");
       }
     });
   };
 
-  if (accounts.length === 0) {
+  if (accounts.length < 2) {
     return (
       <div className="rounded-3xl border border-dashed border-white/10 bg-[#0f172a] p-8 text-center">
-        <h2 className="text-2xl font-bold text-white">No active account found</h2>
+        <h2 className="text-2xl font-bold text-white">
+          Not enough accounts
+        </h2>
         <p className="mt-2 text-slate-400">
-          You need to open an account before making a withdrawal.
+          You need at least two active accounts to make a transfer.
         </p>
         <a
           href="/customer/accounts"
@@ -108,32 +126,59 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
         className="space-y-6 rounded-3xl border border-white/10 bg-[#0f172a] p-6"
       >
         <div>
-          <h2 className="text-xl font-bold text-white">Withdrawal Details</h2>
+          <h2 className="text-xl font-bold text-white">Transfer Details</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Choose an account and enter an amount that does not exceed the current balance.
+            Select source and destination accounts, then enter the amount.
           </p>
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-slate-300">
-            Select Account
+            From Account
           </label>
           <select
-            value={selectedAccount}
+            value={fromAccount}
             onChange={(e) => {
-              setSelectedAccount(e.target.value);
+              const value = e.target.value;
+              setFromAccount(value);
+              if (value === toAccount) setToAccount("");
               setError("");
               setMessage("");
             }}
             className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
           >
-            <option value="">Choose an account</option>
+            <option value="">Choose source account</option>
             {accounts.map((account) => (
               <option key={account.account_id} value={account.account_id}>
                 {account.account_name} • {account.account_type} • ****
                 {account.account_number?.slice(-4)}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-slate-300">
+            To Account
+          </label>
+          <select
+            value={toAccount}
+            onChange={(e) => {
+              setToAccount(e.target.value);
+              setError("");
+              setMessage("");
+            }}
+            className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
+          >
+            <option value="">Choose destination account</option>
+            {accounts
+              .filter((account) => account.account_id !== fromAccount)
+              .map((account) => (
+                <option key={account.account_id} value={account.account_id}>
+                  {account.account_name} • {account.account_type} • ****
+                  {account.account_number?.slice(-4)}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -149,20 +194,20 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
               setError("");
               setMessage("");
             }}
-            placeholder="Enter withdrawal amount"
+            placeholder="Enter transfer amount"
             className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-cyan-400"
           />
         </div>
 
-        {selectedAccountData ? (
+        {fromAccountData ? (
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
             <p className="text-sm font-medium text-slate-400">Available Balance</p>
             <p className="mt-1 text-2xl font-bold text-white">
               {formatCurrency(availableBalance, currency)}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Account: {selectedAccountData.account_name} • ****
-              {selectedAccountData.account_number?.slice(-4)}
+              Account: {fromAccountData.account_name} • ****
+              {fromAccountData.account_number?.slice(-4)}
             </p>
           </div>
         ) : null}
@@ -192,7 +237,7 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
               Processing...
             </>
           ) : (
-            "Withdraw Money"
+            "Transfer Money"
           )}
         </button>
       </form>
@@ -200,31 +245,48 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
       <div className="space-y-6">
         <div className="rounded-3xl border border-white/10 bg-[#0f172a] p-6">
           <div className="flex items-center gap-3">
-            <Banknote className="text-cyan-400" />
-            <h3 className="text-lg font-bold text-white">Withdrawal Summary</h3>
+            <ArrowLeftRight className="text-cyan-400" />
+            <h3 className="text-lg font-bold text-white">Transfer Summary</h3>
           </div>
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-5">
-            <p className="text-sm text-slate-400">Selected Account</p>
+            <p className="text-sm text-slate-400">From Account</p>
             <p className="mt-1 text-base font-semibold text-white">
-              {selectedAccountData
-                ? `${selectedAccountData.account_name} • ****${selectedAccountData.account_number?.slice(-4)}`
+              {fromAccountData
+                ? `${fromAccountData.account_name} • ****${fromAccountData.account_number?.slice(-4)}`
                 : "No account selected"}
             </p>
 
-            <p className="mt-4 text-sm text-slate-400">Withdrawal Amount</p>
+            <p className="mt-4 text-sm text-slate-400">To Account</p>
+            <p className="mt-1 text-base font-semibold text-white">
+              {toAccountData
+                ? `${toAccountData.account_name} • ****${toAccountData.account_number?.slice(-4)}`
+                : "No account selected"}
+            </p>
+
+            <p className="mt-4 text-sm text-slate-400">Transfer Amount</p>
             <p className="mt-1 text-base font-semibold text-white">
               {amount && Number(amount) > 0
                 ? formatCurrency(Number(amount), currency)
                 : formatCurrency(0, currency)}
             </p>
 
-            <p className="mt-4 text-sm text-slate-400">Remaining Balance</p>
+            <p className="mt-4 text-sm text-slate-400">Source Remaining Balance</p>
             <p className="mt-1 text-base font-semibold text-white">
-              {selectedAccountData
+              {fromAccountData
                 ? formatCurrency(
                     Math.max(availableBalance - Number(amount || 0), 0),
                     currency
+                  )
+                : formatCurrency(0, currency)}
+            </p>
+
+            <p className="mt-4 text-sm text-slate-400">Destination New Balance</p>
+            <p className="mt-1 text-base font-semibold text-white">
+              {toAccountData
+                ? formatCurrency(
+                    Number(toAccountData.balance || 0) + Number(amount || 0),
+                    toAccountData.currency ?? "USD"
                   )
                 : formatCurrency(0, currency)}
             </p>
@@ -237,8 +299,9 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
             <h3 className="text-lg font-bold text-white">Important Note</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            For this demo, withdrawals are processed instantly after submission.
-            The system will reject any amount greater than the available balance.
+            For this demo, transfers between your accounts are processed
+            instantly. The system will reject any amount greater than the source
+            account balance.
           </p>
         </div>
       </div>
