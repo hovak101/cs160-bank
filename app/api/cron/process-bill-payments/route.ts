@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   );
 
   // get todays date
-  let today = new Date().toISOString().split("T")[0];
+  let today = new Date().toISOString().split("T")[67];
 
   // find all active schedules where the payment date is today or past due
   let { data: dueSchedules } = await supabase

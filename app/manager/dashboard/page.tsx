@@ -48,10 +48,10 @@ export default async function ManagerDashboardPage() {
               Manager Dashboard
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-white">
-              Welcome, {name}
+              Welcome, Manager {name}
             </h1>
             <p className="mt-2 max-w-xl text-slate-400">
-              Here's an overview of your bank's performance
+              Here's an overview of the bank's performance
             </p>
           </div>
         </section>
