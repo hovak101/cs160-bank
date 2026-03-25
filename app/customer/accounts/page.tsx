@@ -1,3 +1,4 @@
+import { CloseAccountButton } from "@/components/customer/close-account-button";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Landmark, Calendar, ShieldCheck } from "lucide-react";
@@ -71,6 +72,10 @@ export default async function AccountsPage() {
               <div className="flex items-center gap-2 text-slate-400">
                 Opened {new Date(acc.created_at).toLocaleDateString()}
               </div>
+                <CloseAccountButton
+                  accountId={acc.account_id}
+                  status={acc.status}
+                />              
             </div>
           </Card>
         ))}
