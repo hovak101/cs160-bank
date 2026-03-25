@@ -107,18 +107,6 @@ console.log("accountsRes", accountsRes);
           isPositive: transactionTrendPercent >= 0,
         }}
       />
-      <StatsCard
-        title="Average Account Balance"
-        value={`$${(
-          (totalBalance / 100) /
-          (totalAccounts || 1)
-        ).toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`}
-        description="Per account average"
-        icon={BarChart3}
-      />
     </div>
   );
 }
