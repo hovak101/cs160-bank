@@ -17,6 +17,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+  
+    if (userData?.role !== "customer") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    
     const formData = await req.formData();
     const accountId = String(formData.get("account_id") || "");
     const amountValue = Number(formData.get("amount"));
