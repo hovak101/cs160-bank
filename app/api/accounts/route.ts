@@ -10,6 +10,17 @@ export async function POST(request: Request) {
     if (authError || !user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+  
+    if (userData?.role !== "customer") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    
     const body = await request.json();
     const { currency, account_name, account_type } = body;
 
