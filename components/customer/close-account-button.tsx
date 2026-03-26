@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function CloseAccountButton({ accountId, status }) {
+export function CloseAccountButton({ accountId, status }: { accountId: string; status: string }) {
   const [loading, setLoading] = useState(false);
 
   if (status === "closed") return null;
