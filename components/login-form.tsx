@@ -5,6 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+type AppUserStatus = {
+  is_active: boolean | null;
+  account_locked_until: string | null;
+  deactivation_reason: string | null;
+};
+
 export function LoginForm() {
   const supabase = createClient();
   const router = useRouter();
@@ -31,6 +37,45 @@ export function LoginForm() {
     }
 
     const userId = data.user.id;
+
+    const { data: rawAppUser, error: userError } = await supabase
+      .from("users")
+      .select("is_active, account_locked_until, deactivation_reason")
+      .eq("user_id", userId)
+      .single();
+
+    const appUser = rawAppUser as unknown as AppUserStatus | null;
+
+    if (userError) {
+      setMessage("Failed to verify account status.");
+      setLoading(false);
+      return;
+    }
+
+    if (appUser?.is_active === false) {
+      await supabase.auth.signOut();
+
+      router.push(
+        `/auth/account-disabled?type=disabled&reason=${encodeURIComponent(
+          appUser.deactivation_reason || "Your account has been disabled."
+        )}`
+      );
+      return;
+    }
+
+    if (
+      appUser?.account_locked_until &&
+      new Date(appUser.account_locked_until).getTime() > Date.now()
+    ) {
+      await supabase.auth.signOut();
+
+      router.push(
+        `/auth/account-disabled?type=locked&reason=${encodeURIComponent(
+          appUser.deactivation_reason || "Your account is temporarily locked."
+        )}&until=${encodeURIComponent(appUser.account_locked_until)}`
+      );
+      return;
+    }
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")
