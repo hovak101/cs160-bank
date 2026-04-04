@@ -45,16 +45,19 @@ function getSSNLast4(taxId: string | null | undefined) {
   return digits.slice(-4);
 }
 
+function safePositiveInteger(value: string | null, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
 
     const name = (req.nextUrl.searchParams.get("name") || "").trim().toLowerCase();
     const ssn = normalizeDigits(req.nextUrl.searchParams.get("ssn") || "");
-
-    if (!name && !ssn) {
-      return NextResponse.json({ data: [] });
-    }
+    const page = safePositiveInteger(req.nextUrl.searchParams.get("page"), 1);
+    const pageSize = safePositiveInteger(req.nextUrl.searchParams.get("pageSize"), 5);
 
     const [
       { data: customers, error: customersError },
@@ -107,7 +110,7 @@ export async function GET(req: NextRequest) {
 
     const usersMap = new Map(userRows.map((user) => [user.user_id, user]));
 
-    const matchedCustomers = customerRows.filter((customer) => {
+    const filteredCustomers = customerRows.filter((customer) => {
       const firstName = (customer.first_name || "").toLowerCase();
       const lastName = (customer.last_name || "").toLowerCase();
       const fullName = `${firstName} ${lastName}`.trim();
@@ -124,11 +127,28 @@ export async function GET(req: NextRequest) {
       return matchesName && matchesSSN;
     });
 
-    const results = matchedCustomers.map((customer) => {
+    const sortedCustomers = filteredCustomers.sort((a, b) => {
+      const aName = `${a.first_name || ""} ${a.last_name || ""}`.trim().toLowerCase();
+      const bName = `${b.first_name || ""} ${b.last_name || ""}`.trim().toLowerCase();
+      return aName.localeCompare(bName);
+    });
+
+    const totalCustomers = sortedCustomers.length;
+    const totalPages = Math.max(1, Math.ceil(totalCustomers / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const startIndex = (safePage - 1) * pageSize;
+    const pagedCustomers = sortedCustomers.slice(startIndex, startIndex + pageSize);
+
+    const results = pagedCustomers.map((customer) => {
       const user = usersMap.get(customer.user_id);
-      const customerAccounts = accountRows.filter(
-        (account) => account.customer_id === customer.customer_id
-      );
+
+      const customerAccounts = accountRows
+        .filter((account) => account.customer_id === customer.customer_id)
+        .sort((a, b) => {
+          const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return bTime - aTime;
+        });
 
       const totalBalance = customerAccounts.reduce(
         (sum, account) => sum + Number(account.balance || 0),
@@ -155,17 +175,25 @@ export async function GET(req: NextRequest) {
           account_type: account.account_type || "N/A",
           balance: Number(account.balance || 0),
           currency: account.currency || "USD",
-          status: account.status || "pending",
+          status: account.status || "active",
           created_at: account.created_at,
         })),
       };
     });
 
-    return NextResponse.json({ data: results });
+    return NextResponse.json({
+      data: results,
+      pagination: {
+        page: safePage,
+        pageSize,
+        totalCustomers,
+        totalPages,
+      },
+    });
   } catch (error) {
     console.error("Customer search API error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch search results." },
+      { error: "Failed to fetch customers." },
       { status: 500 }
     );
   }
