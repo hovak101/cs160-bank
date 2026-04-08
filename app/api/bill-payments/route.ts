@@ -12,10 +12,10 @@ export async function GET() {
   }
 
   const { data: userData } = await supabase
-  .from("users")
-  .select("role")
-  .eq("user_id", user.id)
-  .single();
+    .from("users")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
 
   if (userData?.role !== "customer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
