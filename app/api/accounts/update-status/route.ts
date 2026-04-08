@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     const { data: updatedRows, error: updateError } = await supabase
       .from("accounts")
       .update({
-        status,
+        status: status as "active" | "frozen" | "closed",
         updated_at: new Date().toISOString(),
       })
       .eq("account_id", accountId)
