@@ -11,6 +11,16 @@ export async function GET() {
     return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   }
 
+  const { data: userData } = await supabase
+  .from("users")
+  .select("role")
+  .eq("user_id", user.id)
+  .single();
+
+  if (userData?.role !== "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  
   // get the customer id from the customers table
   let { data: customerData } = await supabase
     .from("customers")
