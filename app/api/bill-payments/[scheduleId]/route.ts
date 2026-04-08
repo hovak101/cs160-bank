@@ -11,6 +11,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ s
     return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   }
 
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+  
+  if (userData?.role !== "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  
   let { scheduleId } = await params;
 
   // set the status to cancelled in the database

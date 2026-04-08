@@ -22,6 +22,16 @@ export async function POST(
     return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   }
 
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+  
+   if (userData?.role !== "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+   }
+  
   const { data: account } = await supabase
     .from("accounts")
     .select("account_id, customer_id, balance, status")
