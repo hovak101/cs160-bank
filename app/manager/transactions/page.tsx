@@ -1,66 +1,382 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { Landmark } from "lucide-react";
-export const dynamic = "force-dynamic";
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 
-export default async function PlaceholderPage() {
-  const supabase = await createClient();
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+type TransactionItem = {
+  transaction_id: string;
+  reference_number: string;
+  source_account_id: string | null;
+  destination_account_id: string | null;
+  amount: number;
+  transaction_type: string | null;
+  status: string | null;
+  description: string | null;
+  executed_at: string | null;
+};
 
-  if (!user) redirect("/auth/login");
+type TransactionResponse = {
+  data: TransactionItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalTransactions: number;
+    totalPages: number;
+  };
+};
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-    if (userData?.role !== "manager") {
-        redirect("/dashboard");
+const ITEMS_PER_PAGE = 10;
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(value || 0);
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "N/A";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getTransactionTypeBadgeClass(type: string | null) {
+  const value = (type || "").toLowerCase();
+
+  if (value === "deposit") {
+    return "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300";
+  }
+  if (value === "withdrawal") {
+    return "border border-orange-500/30 bg-orange-500/15 text-orange-300";
+  }
+  if (value === "transfer") {
+    return "border border-cyan-500/30 bg-cyan-500/15 text-cyan-300";
+  }
+  if (value === "fee") {
+    return "border border-red-500/30 bg-red-500/15 text-red-300";
+  }
+  if (value === "interest") {
+    return "border border-purple-500/30 bg-purple-500/15 text-purple-300";
+  }
+
+  return "border border-slate-500/30 bg-slate-500/15 text-slate-300";
+}
+
+function getStatusBadgeClass(status: string | null) {
+  const value = (status || "").toLowerCase();
+
+  if (value === "completed") {
+    return "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300";
+  }
+  if (value === "pending") {
+    return "border border-yellow-500/30 bg-yellow-500/15 text-yellow-300";
+  }
+  if (value === "failed") {
+    return "border border-red-500/30 bg-red-500/15 text-red-300";
+  }
+  if (value === "reversed") {
+    return "border border-slate-500/30 bg-slate-500/15 text-slate-300";
+  }
+
+  return "border border-slate-500/30 bg-slate-500/15 text-slate-300";
+}
+
+export default function ManagerTransactionsPage() {
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  async function parseJsonResponse<T>(res: Response): Promise<T> {
+    const contentType = res.headers.get("content-type") || "";
+    const rawText = await res.text();
+
+    if (!contentType.includes("application/json")) {
+      console.error("Non-JSON response:", rawText);
+      throw new Error("API returned HTML instead of JSON.");
     }
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1a2847] to-[#0f172a]">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-[#0f172a]/80 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-white">
-            <Landmark className="h-5 w-5 text-teal-400" />
-            Vitality <span className="text-teal-400">Bank</span>
-          </div>
 
+    return JSON.parse(rawText) as T;
+  }
+
+  async function loadTransactions(page = 1, options?: { referenceNumber?: string }) {
+    try {
+      setLoading(true);
+      setError("");
+
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(ITEMS_PER_PAGE));
+
+      const searchRef = (options?.referenceNumber ?? referenceNumber).trim();
+      if (searchRef) params.set("referenceNumber", searchRef);
+
+      const res = await fetch(`/api/manager/transactions/search?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const json = await parseJsonResponse<TransactionResponse | { error?: string }>(res);
+
+      if (!res.ok) {
+        throw new Error(("error" in json && json.error) || "Failed to load transactions.");
+      }
+
+      const payload = json as TransactionResponse;
+
+      setTransactions(payload.data || []);
+      setCurrentPage(payload.pagination?.page || page);
+      setTotalTransactions(payload.pagination?.totalTransactions || 0);
+      setTotalPages(payload.pagination?.totalPages || 1);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setTransactions([]);
+      setCurrentPage(1);
+      setTotalTransactions(0);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadTransactions(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleSearch() {
+    await loadTransactions(1);
+  }
+
+  async function handleClear() {
+    const cleared = "";
+    setReferenceNumber(cleared);
+
+    await loadTransactions(1, {
+      referenceNumber: cleared,
+    });
+  }
+
+  async function goToPage(page: number) {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    await loadTransactions(page);
+  }
+
+  return (
+    <div className="px-6 py-8">
+      <div className="mb-8">
+        <div className="mb-4">
           <Link
-            href="/dashboard"
-            className="text-sm text-slate-400 hover:text-teal-400 transition"
+            href="/manager/dashboard"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-[#081328] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-cyan-400/30 hover:text-white"
           >
-            ← Back to Dashboard
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
           </Link>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-10">
-        <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#0f172a] p-10 shadow-2xl text-center">
-          {/* Glow */}
-          <div className="pointer-events-none absolute left-1/2 top-0 h-full w-full -translate-x-1/2 bg-[radial-gradient(circle_at_50%_-20%,#22d3ee33,transparent_70%)]" />
+        <h1 className="text-4xl font-bold text-white">Transactions</h1>
+        <p className="mt-2 text-slate-400">
+          Review all transactions across the bank.
+        </p>
+      </div>
 
-          <div className="relative z-10">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-teal-400">
-              Coming Soon
-            </p>
+      <div className="rounded-[24px] border border-cyan-500/10 bg-[#081328] p-5">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+          <input
+            type="text"
+            value={referenceNumber}
+            onChange={(e) => setReferenceNumber(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch();
+            }}
+            placeholder="Search by reference number"
+            className="h-12 rounded-xl border border-slate-700 bg-[#0b1a33] px-4 text-white outline-none transition focus:border-cyan-400"
+          />
 
-            <h1 className="text-4xl font-bold tracking-tight text-white">
-              Transactions
-            </h1>
+          <div className="flex gap-3">
+            <button
+              onClick={handleSearch}
+              className="h-12 rounded-xl bg-cyan-500 px-6 font-semibold text-slate-950 transition hover:bg-cyan-400"
+            >
+              Search
+            </button>
 
-            <p className="mt-3 text-slate-400 max-w-xl mx-auto">
-              Placeholder
-            </p>
+            <button
+              onClick={handleClear}
+              className="h-12 rounded-xl border border-slate-700 bg-[#0b1a33] px-6 font-semibold text-white transition hover:border-slate-500"
+            >
+              Clear
+            </button>
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-500/10 bg-[#081328] px-5 py-4">
+        <div className="text-sm text-slate-400">
+          Total transactions: <span className="font-semibold text-white">{totalTransactions}</span>
+        </div>
+        <div className="text-sm text-slate-400">
+          Page <span className="font-semibold text-white">{currentPage}</span> of{" "}
+          <span className="font-semibold text-white">{totalPages}</span>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-red-300">
+          {error}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="mt-6 rounded-2xl border border-cyan-500/10 bg-[#081328] p-6 text-slate-300">
+          Loading transactions...
+        </div>
+      ) : null}
+
+      {!loading && transactions.length === 0 ? (
+        <div className="mt-6 rounded-2xl border border-cyan-500/10 bg-[#081328] p-10 text-center text-slate-400">
+          No transactions found.
+        </div>
+      ) : null}
+
+      {!loading && transactions.length > 0 ? (
+        <div className="mt-6 space-y-4">
+          {transactions.map((transaction) => (
+            <div
+              key={transaction.transaction_id}
+              className="rounded-[28px] border border-slate-800 bg-gradient-to-r from-[#081a33] to-[#0a1f3d] p-6"
+            >
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-2xl font-bold text-white">
+                      {formatCurrency(transaction.amount)}
+                    </h2>
+
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getTransactionTypeBadgeClass(
+                        transaction.transaction_type
+                      )}`}
+                    >
+                      {transaction.transaction_type}
+                    </span>
+
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(
+                        transaction.status
+                      )}`}
+                    >
+                      {transaction.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-800 bg-[#09172d] p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Reference #
+                      </p>
+                      <p className="mt-2 truncate text-sm font-semibold text-white">
+                        {transaction.reference_number}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-800 bg-[#09172d] p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Executed
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-white">
+                        {formatDateTime(transaction.executed_at)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-800 bg-[#09172d] p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Description
+                      </p>
+                      <p className="mt-2 truncate text-sm font-semibold text-white">
+                        {transaction.description || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    {transaction.source_account_id && (
+                      <div className="rounded-2xl border border-slate-800 bg-[#09172d] p-4">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">
+                          Source Account
+                        </p>
+                        <p className="mt-2 truncate text-sm font-semibold text-white">
+                          {transaction.source_account_id}
+                        </p>
+                      </div>
+                    )}
+
+                    {transaction.destination_account_id && (
+                      <div className="rounded-2xl border border-slate-800 bg-[#09172d] p-4">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">
+                          Destination Account
+                        </p>
+                        <p className="mt-2 truncate text-sm font-semibold text-white">
+                          {transaction.destination_account_id}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {!loading && totalPages > 1 ? (
+        <div className="mt-8 flex items-center justify-center gap-2">
+          <button
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="rounded-xl border border-slate-700 bg-[#0b1a33] px-4 py-2 text-sm font-semibold text-white transition hover:border-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <button
+              key={page}
+              onClick={() => goToPage(page)}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                page === currentPage
+                  ? "bg-cyan-500 text-slate-950"
+                  : "border border-slate-700 bg-[#0b1a33] text-white hover:border-slate-500"
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+
+          <button
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="rounded-xl border border-slate-700 bg-[#0b1a33] px-4 py-2 text-sm font-semibold text-white transition hover:border-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

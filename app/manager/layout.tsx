@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { ManagerShell } from "@/components/manager/ManagerShell";
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +25,5 @@ export default async function ManagerLayout({
 
   if (data?.role !== "manager") redirect("/auth/login");
 
-  return <div className="min-h-screen bg-slate-50">{children}</div>;
+  return <ManagerShell>{children}</ManagerShell>;
 }
