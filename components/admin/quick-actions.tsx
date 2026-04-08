@@ -6,7 +6,7 @@ const actions = [
   { name: "Deposits", href: "/admin/deposits" },
   { name: "Withdrawals", href: "/admin/withdrawals" },
   { name: "User Management", href: "/admin/users" },
-  { name: "Managers", href: "/admin/settings" },
+  { name: "Managers", href: "/admin/managers" },
 ];
 
 export function QuickActions() {
