@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type AppUserStatus = {
@@ -14,6 +14,8 @@ type AppUserStatus = {
 export function LoginForm() {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const resetSuccess = searchParams.get("reset") === "success";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -105,6 +107,12 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
+      {resetSuccess && (
+        <p className="text-center text-sm text-cyan-400">
+          Password updated. Please log in with your new password.
+        </p>
+      )}
+
       <div className="space-y-2">
         <label className="text-xs font-medium uppercase tracking-wide text-white/70">
           Email
