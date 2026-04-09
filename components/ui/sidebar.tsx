@@ -9,6 +9,7 @@ import {
   Send,
   Settings,
   Landmark,
+  CalendarClock, // Import this
   X
 } from "lucide-react";
 
@@ -20,6 +21,8 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
     { name: "Accounts", icon: Users, href: "/customer/accounts" },
     { name: "Transactions", icon: ArrowRightLeft, href: "/customer/transactions" },
     { name: "Transfers", icon: Send, href: "/customer/transfers" },
+    // NEW LINK
+    { name: "Bill Payments", icon: CalendarClock, href: "/customer/bill-payments" },
     { name: "Settings", icon: Settings, href: "/customer/settings" },
   ];
 
@@ -36,8 +39,6 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
           </div>
           <span className="text-white font-bold text-xl">Vitality <span className="text-cyan-400">Bank</span></span>
         </div>
-        
-        {/* Close Button for Mobile/Overlay mode */}
         <button onClick={() => setOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
           <X size={20} />
         </button>
@@ -48,7 +49,7 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => setOpen(false)} // Close sidebar when a link is clicked
+            onClick={() => setOpen(false)}
             className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all
               ${pathname === item.href
                   ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
