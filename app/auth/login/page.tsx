@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
@@ -35,7 +36,9 @@ export default async function LoginPage() {
             </div>
 
             <div className="px-8 pb-8 pt-4">
-              <LoginForm />
+              <Suspense fallback={null}>
+                <LoginForm />
+              </Suspense>
             </div>
           </div>
         </div>
