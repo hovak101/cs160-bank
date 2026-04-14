@@ -9,6 +9,7 @@ import {
   ScanLine,
   Banknote,
   PlusCircle,
+  Inbox,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
@@ -26,6 +27,18 @@ const quickActions = [
     description: "Track deposits, withdrawals, and transfer history.",
     href: "/customer/transactions",
     icon: ArrowLeftRight,
+  },
+  {
+    title: "Transfers",
+    description: "Move money between your own accounts.",
+    href: "/customer/transfers",
+    icon: ArrowLeftRight,
+  },
+  {
+    title: "CashBox",
+    description: "Receive money by phone and manage your CashBox balance.",
+    href: "/customer/cashbox",
+    icon: Inbox,
   },
   {
     title: "Withdraw Money",
@@ -149,6 +162,14 @@ export default async function CustomerDashboardPage() {
     }));
   }
 
+  const { data: cashboxData } = await supabase
+    .from("cashboxes")
+    .select("cashbox_id, balance")
+    .eq("customer_id", customer.customer_id)
+    .maybeSingle();
+
+  const cashboxBalance = Number(cashboxData?.balance ?? 0);
+
   const totalBalance = accounts.reduce(
     (sum, account) => sum + Number(account.balance ?? 0),
     0
@@ -175,10 +196,14 @@ export default async function CustomerDashboardPage() {
         </div>
       </section>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Accounts Overview"
           value={formatCurrency(totalBalance)}
+        />
+        <MetricCard
+          title="CashBox Balance"
+          value={formatCurrency(cashboxBalance)}
         />
         <MetricCard title="Pending Payments" value={String(pendingPayments)} />
         <MetricCard
@@ -252,9 +277,55 @@ export default async function CustomerDashboardPage() {
             )}
           </Card>
 
+          <Card className="border-white/10 bg-[#0f172a] p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-white">CashBox</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Receive money by phone number and keep it in your CashBox.
+                </p>
+              </div>
+              <Link
+                href="/customer/cashbox"
+                className="text-sm font-medium text-cyan-400 hover:text-cyan-300"
+              >
+                Open CashBox
+              </Link>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-base font-semibold text-white">
+                    Available CashBox Balance
+                  </p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Money received from other users will appear here instantly.
+                  </p>
+                </div>
+
+                <div className="text-left md:text-right">
+                  <p className="text-2xl font-bold text-white">
+                    {formatCurrency(cashboxBalance)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <Link
+                  href="/customer/cashbox"
+                  className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                >
+                  <Inbox size={16} />
+                  Manage CashBox
+                </Link>
+              </div>
+            </div>
+          </Card>
+
           <section>
             <h2 className="mb-6 text-xl font-bold text-white">Quick Actions</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {quickActions.map((item) => (
                 <Link key={item.title} href={item.href}>
                   <Card className="group h-full border-white/10 bg-[#0f172a] p-6 transition-all hover:border-cyan-400/50">
@@ -307,7 +378,9 @@ export default async function CustomerDashboardPage() {
                           {tx.transaction_type || "Transaction"}
                         </p>
                         <p className="mt-1 text-sm text-slate-400">
-                          {tx.description || tx.reference_number || "No description"}
+                          {tx.description ||
+                            tx.reference_number ||
+                            "No description"}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           {formatDate(tx.executed_at)}
