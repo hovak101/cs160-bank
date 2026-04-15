@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ManagerShell } from "@/components/manager/ManagerShell";
+import { IdleLogoutProvider } from "@/components/auth/idle-logout-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +26,9 @@ export default async function ManagerLayout({
 
   if (data?.role !== "manager") redirect("/auth/login");
 
-  return <ManagerShell>{children}</ManagerShell>;
+  return (
+    <IdleLogoutProvider>
+      <ManagerShell>{children}</ManagerShell>
+    </IdleLogoutProvider>
+  );
 }
