@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/require-role";
 
 type LockType = "permanent" | "24h" | "7d";
 
@@ -19,7 +19,9 @@ function getLockedUntil(lockType: LockType) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    const auth = await requireRole(["admin"]);
+    if (!auth.ok) return auth.response;
+    const { supabase } = auth;
     const body = await req.json();
 
     const userId = body.user_id as string | undefined;

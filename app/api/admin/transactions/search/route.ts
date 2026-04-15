@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/require-role";
 
 type TransactionItem = {
   transaction_id: string;
@@ -25,7 +25,9 @@ type TransactionResponse = {
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    const auth = await requireRole(["admin"]);
+    if (!auth.ok) return auth.response;
+    const { supabase } = auth;
 
     const searchParams = req.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
