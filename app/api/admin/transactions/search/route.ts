@@ -31,15 +31,29 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const pageSize = Math.max(1, parseInt(searchParams.get("pageSize") || "10"));
     const transactionType = searchParams.get("transactionType");
+    const transactionStatus = searchParams.get("transactionStatus");
     const referenceNumber = searchParams.get("referenceNumber");
+    const dateSort = searchParams.get("dateSort"); // "asc" or "desc"
+    const specificDate = searchParams.get("specificDate"); // YYYY-MM-DD format
+    const minAmount = searchParams.get("minAmount");
+    const maxAmount = searchParams.get("maxAmount");
+    const cashboxOnly = searchParams.get("cashboxOnly") === "true";
 
     let query = supabase
       .from("transactions")
       .select("*", { count: "exact" });
 
-    // Filter by transaction type if specified (deposits, withdrawals)
-    if (transactionType && transactionType !== "all") {
+    // Filter by cashbox transactions if requested
+    if (cashboxOnly) {
+      query = query.in("transaction_type", ["cashbox_withdraw", "cashbox_send"]);
+    } else if (transactionType && transactionType !== "all") {
+      // Filter by transaction type if specified (deposits, withdrawals)
       query = query.eq("transaction_type", transactionType);
+    }
+
+    // Filter by transaction status if specified
+    if (transactionStatus && transactionStatus !== "all") {
+      query = query.eq("status", transactionStatus);
     }
 
     // Filter by reference number if provided
@@ -47,14 +61,35 @@ export async function GET(req: NextRequest) {
       query = query.ilike("reference_number", `%${referenceNumber.trim()}%`);
     }
 
+    // Filter by specific date if provided
+    if (specificDate) {
+      const startOfDay = new Date(specificDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(specificDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      
+      query = query
+        .gte("executed_at", startOfDay.toISOString())
+        .lte("executed_at", endOfDay.toISOString());
+    }
+
+    // Filter by amount range if provided
+    if (minAmount) {
+      query = query.gte("amount", parseFloat(minAmount));
+    }
+    if (maxAmount) {
+      query = query.lte("amount", parseFloat(maxAmount));
+    }
+
     // Get total count
     const { count: totalCount } = await query;
     const total = totalCount || 0;
     const totalPages = Math.ceil(total / pageSize);
 
-    // Fetch paginated results ordered by executed_at descending
+    // Fetch paginated results with sorting
+    const sortAscending = dateSort === "asc";
     const { data: transactions, error } = await query
-      .order("executed_at", { ascending: false })
+      .order("executed_at", { ascending: sortAscending })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
     if (error) {

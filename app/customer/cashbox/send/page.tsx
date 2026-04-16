@@ -14,6 +14,11 @@ type Account = {
   status: string;
 };
 
+type CashboxRow = {
+  cashbox_id: string;
+  balance: number;
+};
+
 export default async function CashBoxSendPage() {
   const supabase = await createClient();
 
@@ -50,5 +55,39 @@ export default async function CashBoxSendPage() {
     status: account.status ?? "unknown",
   }));
 
-  return <CashboxSendForm accounts={accounts} />;
+  let cashbox: CashboxRow | null = null;
+
+  const { data: cashboxData } = await (supabase as any)
+    .from("cashboxes")
+    .select("cashbox_id, balance")
+    .eq("customer_id", customer.customer_id)
+    .maybeSingle();
+
+  cashbox = cashboxData as CashboxRow | null;
+
+  if (!cashbox) {
+    const { data: createdCashbox, error: createCashboxError } = await (supabase as any)
+      .from("cashboxes")
+      .insert({
+        customer_id: customer.customer_id,
+        balance: 0,
+      })
+      .select("cashbox_id, balance")
+      .single();
+
+    if (createCashboxError) {
+      throw new Error(createCashboxError.message);
+    }
+
+    cashbox = createdCashbox as CashboxRow;
+  }
+
+  const cashboxBalance = Number(cashbox?.balance ?? 0);
+
+  return (
+    <CashboxSendForm
+      accounts={accounts}
+      cashboxBalance={cashboxBalance}
+    />
+  );
 }

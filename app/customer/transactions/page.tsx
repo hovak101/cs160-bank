@@ -38,11 +38,13 @@ export default async function CustomerTransactionsPage() {
 
   const { data: customer } = await supabase
     .from("customers")
-    .select("customer_id, first_name, last_name")
+    .select("customer_id, first_name, last_name, phone_number")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!customer) redirect("/customer/onboarding");
+
+  const currentPhoneDigits = normalizePhone(customer.phone_number);
 
   const { data: accountsData } = await supabase
     .from("accounts")
@@ -54,29 +56,94 @@ export default async function CustomerTransactionsPage() {
 
   let transactions: Transaction[] = [];
 
-  if (accountIds.length > 0) {
-    const orQuery = accountIds
-      .map((id) => `source_account_id.eq.${id},destination_account_id.eq.${id}`)
-      .join(",");
+  const accountOrQuery =
+    accountIds.length > 0
+      ? accountIds
+          .map(
+            (id) =>
+              `source_account_id.eq.${id},destination_account_id.eq.${id}`
+          )
+          .join(",")
+      : "";
 
-    const { data: txData } = await supabase
-      .from("transactions")
-      .select(`
-        transaction_id,
-        reference_number,
-        source_account_id,
-        destination_account_id,
-        amount,
-        transaction_type,
-        status,
-        description,
-        executed_at
-      `)
-      .or(orQuery)
-      .order("executed_at", { ascending: false });
+  const accountTxPromise =
+    accountOrQuery.length > 0
+      ? supabase
+          .from("transactions")
+          .select(`
+            transaction_id,
+            reference_number,
+            source_account_id,
+            destination_account_id,
+            amount,
+            transaction_type,
+            status,
+            description,
+            executed_at
+          `)
+          .or(accountOrQuery)
+          .order("executed_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null } as any);
 
-    transactions = txData ?? [];
+  const incomingCashboxPromise = currentPhoneDigits
+    ? supabase
+        .from("transactions")
+        .select(`
+          transaction_id,
+          reference_number,
+          source_account_id,
+          destination_account_id,
+          amount,
+          transaction_type,
+          status,
+          description,
+          executed_at
+        `)
+        .eq("transaction_type", "cashbox_send")
+        .ilike("description", `%${currentPhoneDigits}%`)
+        .order("executed_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null } as any);
+
+  const [accountTxResult, incomingCashboxResult] = await Promise.all([
+    accountTxPromise,
+    incomingCashboxPromise,
+  ]);
+
+  const mergedMap = new Map<string, Transaction>();
+
+  for (const tx of accountTxResult.data ?? []) {
+    mergedMap.set(tx.transaction_id, {
+      transaction_id: tx.transaction_id,
+      reference_number: tx.reference_number ?? null,
+      source_account_id: tx.source_account_id,
+      destination_account_id: tx.destination_account_id,
+      amount: Number(tx.amount ?? 0),
+      transaction_type: tx.transaction_type,
+      status: tx.status,
+      description: tx.description,
+      executed_at: tx.executed_at,
+    });
   }
+
+  for (const tx of incomingCashboxResult.data ?? []) {
+    mergedMap.set(tx.transaction_id, {
+      transaction_id: tx.transaction_id,
+      reference_number: tx.reference_number ?? null,
+      source_account_id: tx.source_account_id,
+      destination_account_id: tx.destination_account_id,
+      amount: Number(tx.amount ?? 0),
+      transaction_type: tx.transaction_type,
+      status: tx.status,
+      description: tx.description,
+      executed_at: tx.executed_at,
+    });
+  }
+
+  transactions = Array.from(mergedMap.values()).sort((a, b) => {
+    const aTime = a.executed_at ? new Date(a.executed_at).getTime() : 0;
+    const bTime = b.executed_at ? new Date(b.executed_at).getTime() : 0;
+    return bTime - aTime;
+  });
 
   const accountMap = new Map(
     accounts.map((account) => [account.account_id, account] as const)
@@ -94,8 +161,8 @@ export default async function CustomerTransactionsPage() {
             Transactions
           </h1>
           <p className="mt-2 max-w-2xl text-slate-400">
-            Review your deposits, withdrawals, transfers, and recent account
-            activity.
+            Review your deposits, withdrawals, transfers, CashBox activity, and
+            recent account history.
           </p>
         </div>
       </section>
@@ -108,7 +175,7 @@ export default async function CustomerTransactionsPage() {
           <h2 className="text-2xl font-bold text-white">No transactions yet</h2>
           <p className="mt-2 text-slate-400">
             Your account activity will appear here once you make a deposit,
-            withdrawal, or transfer.
+            withdrawal, transfer, or CashBox transaction.
           </p>
         </div>
       ) : (
@@ -123,12 +190,16 @@ export default async function CustomerTransactionsPage() {
 
           <div className="divide-y divide-white/10">
             {transactions.map((tx) => {
-              const direction = getTransactionDirection(tx, accountMap);
-              const icon = getTransactionIcon(tx.transaction_type, direction);
+              const meta = getTransactionMeta(
+                tx,
+                accountMap,
+                currentPhoneDigits
+              );
+              const icon = getTransactionIcon(meta.direction);
               const amountPrefix =
-                direction === "incoming"
+                meta.direction === "incoming"
                   ? "+"
-                  : direction === "outgoing"
+                  : meta.direction === "outgoing"
                   ? "-"
                   : "";
 
@@ -143,27 +214,18 @@ export default async function CustomerTransactionsPage() {
                     </div>
 
                     <div className="min-w-0">
-                      <p className="text-base font-semibold capitalize text-white">
-                        {tx.transaction_type || "Transaction"}
+                      <p className="text-base font-semibold text-white">
+                        {meta.title}
                       </p>
 
                       <p className="mt-1 text-sm text-slate-400">
-                        {tx.description || "No description provided"}
+                        {meta.subtitle}
                       </p>
 
                       <div className="mt-2 space-y-1 text-xs text-slate-500">
                         <p>Ref: {tx.reference_number || "N/A"}</p>
-                        <p>
-                          From:{" "}
-                          {formatAccountLabel(tx.source_account_id, accountMap)}
-                        </p>
-                        <p>
-                          To:{" "}
-                          {formatAccountLabel(
-                            tx.destination_account_id,
-                            accountMap
-                          )}
-                        </p>
+                        <p>From: {meta.fromLabel}</p>
+                        <p>To: {meta.toLabel}</p>
                       </div>
                     </div>
                   </div>
@@ -219,15 +281,55 @@ function formatDate(value: string | null) {
   });
 }
 
-function formatAccountLabel(
+function normalizePhone(phone: string | null) {
+  return (phone ?? "").replace(/\D/g, "");
+}
+
+function formatPhone(phone: string | null) {
+  if (!phone) return "N/A";
+
+  const digits = normalizePhone(phone);
+
+  if (digits.length !== 10) return phone;
+
+  return `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function parseCashboxDescription(description: string | null) {
+  const text = description ?? "";
+
+  let match = text.match(
+    /(?:sent|cashbox)\s+from\s+(\d{10})\s+to\s+(\d{10})/i
+  );
+  if (match) {
+    return {
+      senderPhone: match[1],
+      receiverPhone: match[2],
+    };
+  }
+
+  match = text.match(/sent\s+to\s+cashbox\s*\(?(\d{10})\)?/i);
+  if (match) {
+    return {
+      senderPhone: null,
+      receiverPhone: match[1],
+    };
+  }
+
+  const phones = text.match(/\b\d{10}\b/g) ?? [];
+  return {
+    senderPhone: phones[0] ?? null,
+    receiverPhone: phones[1] ?? phones[0] ?? null,
+  };
+}
+
+function getAccountLabel(
   accountId: string | null,
   accountMap: Map<string, Account>
 ) {
-  if (!accountId) return "External / Cash";
-
+  if (!accountId) return null;
   const account = accountMap.get(accountId);
-  if (!account) return "Other account";
-
+  if (!account) return null;
   return `${account.account_name} • ****${account.account_number?.slice(-4)}`;
 }
 
@@ -244,10 +346,23 @@ function getStatusColor(status: string | null) {
   }
 }
 
-function getTransactionDirection(
+function getTransactionIcon(direction: "incoming" | "outgoing" | "internal") {
+  if (direction === "incoming") {
+    return <ArrowDownLeft size={20} />;
+  }
+
+  if (direction === "outgoing") {
+    return <ArrowUpRight size={20} />;
+  }
+
+  return <ArrowLeftRight size={20} />;
+}
+
+function getTransactionMeta(
   tx: Transaction,
-  accountMap: Map<string, Account>
-): "incoming" | "outgoing" | "internal" {
+  accountMap: Map<string, Account>,
+  currentPhoneDigits: string
+) {
   const sourceOwned = !!(
     tx.source_account_id && accountMap.has(tx.source_account_id)
   );
@@ -255,28 +370,127 @@ function getTransactionDirection(
     tx.destination_account_id && accountMap.has(tx.destination_account_id)
   );
 
-  if (sourceOwned && destinationOwned) return "internal";
-  if (destinationOwned) return "incoming";
-  return "outgoing";
+  const sourceLabel = getAccountLabel(tx.source_account_id, accountMap);
+  const destinationLabel = getAccountLabel(tx.destination_account_id, accountMap);
+  const normalizedType = (tx.transaction_type || "").toLowerCase();
+  const parsed = parseCashboxDescription(tx.description);
+
+  if (normalizedType === "cashbox_send") {
+    const isIncomingCashbox =
+      !!currentPhoneDigits &&
+      normalizePhone(parsed.receiverPhone) === currentPhoneDigits &&
+      !sourceOwned;
+
+    if (isIncomingCashbox) {
+      return {
+        direction: "incoming" as const,
+        title: "Received in CashBox",
+        subtitle: `Received from ${formatPhone(parsed.senderPhone)}`,
+        fromLabel: formatPhone(parsed.senderPhone),
+        toLabel: "Your CashBox",
+      };
+    }
+
+    return {
+      direction: "outgoing" as const,
+      title: "Sent to CashBox",
+      subtitle: `Sent to ${formatPhone(parsed.receiverPhone)}`,
+      fromLabel: sourceLabel || formatPhone(parsed.senderPhone) || "Your CashBox",
+      toLabel: formatPhone(parsed.receiverPhone),
+    };
+  }
+
+  if (normalizedType === "cashbox_withdraw") {
+    return {
+      direction: "incoming" as const,
+      title: "Withdraw from CashBox",
+      subtitle: `Moved from CashBox to ${destinationLabel || "your account"}`,
+      fromLabel: "Your CashBox",
+      toLabel: destinationLabel || "Your account",
+    };
+  }
+
+  if (normalizedType === "deposit") {
+    return {
+      direction: "incoming" as const,
+      title: "Deposit",
+      subtitle: tx.description || "Deposit completed",
+      fromLabel: "External Source",
+      toLabel: destinationLabel || "Your account",
+    };
+  }
+
+  if (normalizedType === "withdraw" || normalizedType === "withdrawal") {
+    return {
+      direction: "outgoing" as const,
+      title: "Withdrawal",
+      subtitle: tx.description || "Withdrawal completed",
+      fromLabel: sourceLabel || "Your account",
+      toLabel: "External / Cash",
+    };
+  }
+
+  if (sourceOwned && destinationOwned) {
+    return {
+      direction: "internal" as const,
+      title: "Internal Transfer",
+      subtitle: tx.description || "Transfer between your accounts",
+      fromLabel: sourceLabel || "Your account",
+      toLabel: destinationLabel || "Your account",
+    };
+  }
+
+  if (destinationOwned) {
+    return {
+      direction: "incoming" as const,
+      title: "Incoming Transfer",
+      subtitle: tx.description || "Money received",
+      fromLabel: sourceLabel || "External Source",
+      toLabel: destinationLabel || "Your account",
+    };
+  }
+
+  if (sourceOwned) {
+    return {
+      direction: "outgoing" as const,
+      title: "Outgoing Transfer",
+      subtitle: tx.description || "Money sent",
+      fromLabel: sourceLabel || "Your account",
+      toLabel: "External Destination",
+    };
+  }
+
+  return {
+    direction: "internal" as const,
+    title: formatTransactionType(tx.transaction_type),
+    subtitle: tx.description || "Transaction",
+    fromLabel: sourceLabel || "External Source",
+    toLabel: destinationLabel || "External Destination",
+  };
 }
 
-function getTransactionIcon(
-  type: string | null,
-  direction: "incoming" | "outgoing" | "internal"
-) {
+function formatTransactionType(type: string | null) {
   const normalized = (type || "").toLowerCase();
 
-  if (normalized === "deposit" || direction === "incoming") {
-    return <ArrowDownLeft size={20} />;
+  switch (normalized) {
+    case "cashbox_send":
+      return "CashBox Send";
+    case "cashbox_withdraw":
+      return "CashBox Withdraw";
+    case "bill_payment":
+      return "Bill Payment";
+    case "deposit":
+      return "Deposit";
+    case "withdraw":
+    case "withdrawal":
+      return "Withdrawal";
+    case "transfer":
+      return "Transfer";
+    default:
+      if (!type) return "Transaction";
+      return type
+        .split("_")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
   }
-
-  if (
-    normalized === "withdrawal" ||
-    normalized === "withdraw" ||
-    direction === "outgoing"
-  ) {
-    return <ArrowUpRight size={20} />;
-  }
-
-  return <ArrowLeftRight size={20} />;
 }

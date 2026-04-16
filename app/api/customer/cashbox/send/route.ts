@@ -8,6 +8,10 @@ function generateReferenceNumber() {
   return `CBX-SEND-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
 
+function normalizePhone(phone: string | null | undefined) {
+  return String(phone ?? "").replace(/\D/g, "");
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -22,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const phone_number = String(body.phone_number ?? "").trim();
+    const phone_number = normalizePhone(body.phone_number);
     const source_account_id = String(body.source_account_id ?? "").trim();
     const amount = Number(body.amount ?? 0);
 
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
 
     const { data: senderCustomer, error: senderCustomerError } = await supabaseAdmin
       .from("customers")
-      .select("customer_id, phone_number")
+      .select("customer_id, phone_number, first_name, last_name")
       .eq("user_id", user.id)
       .single();
 
@@ -43,9 +47,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Customer profile not found." }, { status: 404 });
     }
 
+    const senderPhone = normalizePhone(senderCustomer.phone_number);
+
     const { data: sourceAccount, error: sourceAccountError } = await supabaseAdmin
       .from("accounts")
-      .select("account_id, customer_id, balance, currency, status")
+      .select("account_id, customer_id, balance, currency, status, account_name, account_number")
       .eq("account_id", source_account_id)
       .eq("customer_id", senderCustomer.customer_id)
       .single();
@@ -156,7 +162,7 @@ export async function POST(request: Request) {
         amount,
         transaction_type: "cashbox_send",
         status: "completed",
-        description: `Sent to CashBox (${phone_number})`,
+        description: `Sent from ${senderPhone} to ${phone_number}`,
         executed_at: new Date().toISOString(),
       });
 

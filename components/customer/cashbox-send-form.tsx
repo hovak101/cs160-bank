@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 
 type Account = {
@@ -21,12 +21,33 @@ type Recipient = {
   phone_number: string;
 };
 
+type FundingSource =
+  | {
+      value: string;
+      type: "account";
+      label: string;
+      balance: number;
+      currency: string;
+      accountId: string;
+    }
+  | {
+      value: string;
+      type: "cashbox";
+      label: string;
+      balance: number;
+      currency: string;
+      accountId: null;
+    };
+
 export default function CashboxSendForm({
   accounts,
+  cashboxBalance,
 }: {
   accounts: Account[];
+  cashboxBalance: number;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -35,8 +56,35 @@ export default function CashboxSendForm({
   const [recipient, setRecipient] = useState<Recipient | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
 
-  const [sourceAccountId, setSourceAccountId] = useState(
-    accounts[0]?.account_id ?? ""
+  const fundingSources: FundingSource[] = useMemo(() => {
+    const accountSources: FundingSource[] = accounts.map((account) => ({
+      value: `account:${account.account_id}`,
+      type: "account",
+      label: `${(
+        account.account_name || account.account_type
+      ).toUpperCase()} • ****${account.account_number.slice(-4)} • ${formatCurrency(
+        account.balance,
+        account.currency
+      )}`,
+      balance: Number(account.balance ?? 0),
+      currency: account.currency ?? "USD",
+      accountId: account.account_id,
+    }));
+
+    const cashboxSource: FundingSource = {
+      value: "cashbox:cashbox",
+      type: "cashbox",
+      label: `CASHBOX • ${formatCurrency(cashboxBalance)}`,
+      balance: cashboxBalance,
+      currency: "USD",
+      accountId: null,
+    };
+
+    return [...accountSources, cashboxSource];
+  }, [accounts, cashboxBalance]);
+
+  const [sourceValue, setSourceValue] = useState(
+    fundingSources[0]?.value ?? "cashbox:cashbox"
   );
   const [amount, setAmount] = useState("");
 
@@ -48,14 +96,14 @@ export default function CashboxSendForm({
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  const selectedAccount = useMemo(
-    () => accounts.find((account) => account.account_id === sourceAccountId),
-    [accounts, sourceAccountId]
+  const selectedSource = useMemo(
+    () => fundingSources.find((source) => source.value === sourceValue),
+    [fundingSources, sourceValue]
   );
 
   const numericAmount = Number(amount || 0);
-  const insufficientBalance = selectedAccount
-    ? numericAmount > Number(selectedAccount.balance ?? 0)
+  const insufficientBalance = selectedSource
+    ? numericAmount > Number(selectedSource.balance ?? 0)
     : false;
 
   function formatPhoneNumber(value: string) {
@@ -72,26 +120,16 @@ export default function CashboxSendForm({
     )}`;
   }
 
-  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const input = e.target.value;
-    const digits = input.replace(/\D/g, "").slice(0, 10);
-
-    setRawPhone(digits);
-    setPhoneNumber(formatPhoneNumber(digits));
-    setRecipient(null);
-    setError("");
-  }
-
-  async function handleLookupRecipient() {
+  async function lookupRecipientByPhone(digits: string) {
     setError("");
     setRecipient(null);
 
-    if (!rawPhone.trim()) {
+    if (!digits.trim()) {
       setError("Please enter a phone number first.");
       return;
     }
 
-    if (rawPhone.length !== 10) {
+    if (digits.length !== 10) {
       setError("Phone number must be exactly 10 digits.");
       return;
     }
@@ -105,7 +143,7 @@ export default function CashboxSendForm({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          phone_number: rawPhone,
+          phone_number: digits,
         }),
       });
 
@@ -122,6 +160,33 @@ export default function CashboxSendForm({
     } finally {
       setLookupLoading(false);
     }
+  }
+
+  useEffect(() => {
+    const phoneFromQuery = searchParams.get("phone");
+    if (!phoneFromQuery) return;
+
+    const digits = phoneFromQuery.replace(/\D/g, "").slice(0, 10);
+    if (digits.length !== 10) return;
+
+    setRawPhone(digits);
+    setPhoneNumber(formatPhoneNumber(digits));
+
+    void lookupRecipientByPhone(digits);
+  }, [searchParams]);
+
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target.value;
+    const digits = input.replace(/\D/g, "").slice(0, 10);
+
+    setRawPhone(digits);
+    setPhoneNumber(formatPhoneNumber(digits));
+    setRecipient(null);
+    setError("");
+  }
+
+  async function handleLookupRecipient() {
+    await lookupRecipientByPhone(rawPhone);
   }
 
   function handleConfirmRecipient() {
@@ -143,8 +208,8 @@ export default function CashboxSendForm({
       return;
     }
 
-    if (!sourceAccountId) {
-      setError("Please choose a source account.");
+    if (!selectedSource) {
+      setError("Please choose a funding source.");
       return;
     }
 
@@ -154,7 +219,11 @@ export default function CashboxSendForm({
     }
 
     if (insufficientBalance) {
-      setError("Insufficient balance in the selected account.");
+      setError(
+        selectedSource.type === "cashbox"
+          ? "Insufficient CashBox balance."
+          : "Insufficient balance in the selected account."
+      );
       return;
     }
 
@@ -176,8 +245,8 @@ export default function CashboxSendForm({
       return;
     }
 
-    if (!sourceAccountId) {
-      setError("Please choose a source account.");
+    if (!selectedSource) {
+      setError("Please choose a funding source.");
       setStep(2);
       return;
     }
@@ -189,7 +258,11 @@ export default function CashboxSendForm({
     }
 
     if (insufficientBalance) {
-      setError("Insufficient balance in the selected account.");
+      setError(
+        selectedSource.type === "cashbox"
+          ? "Insufficient CashBox balance."
+          : "Insufficient balance in the selected account."
+      );
       setStep(2);
       return;
     }
@@ -197,16 +270,29 @@ export default function CashboxSendForm({
     try {
       setLoading(true);
 
-      const response = await fetch("/api/customer/cashbox/send", {
+      const endpoint =
+        selectedSource.type === "cashbox"
+          ? "/api/customer/cashbox/send-from-cashbox"
+          : "/api/customer/cashbox/send";
+
+      const payload =
+        selectedSource.type === "cashbox"
+          ? {
+              phone_number: rawPhone,
+              amount: numericAmount,
+            }
+          : {
+              phone_number: rawPhone,
+              source_account_id: selectedSource.accountId,
+              amount: numericAmount,
+            };
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          phone_number: rawPhone,
-          source_account_id: sourceAccountId,
-          amount: numericAmount,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();
@@ -216,11 +302,16 @@ export default function CashboxSendForm({
         return;
       }
 
+      const sourceLabel =
+        selectedSource.type === "cashbox"
+          ? "CashBox"
+          : selectedSource.label.split(" • ")[0];
+
       setSuccessMessage(
         `Sent ${formatCurrency(
           numericAmount,
-          selectedAccount?.currency ?? "USD"
-        )} successfully to ${recipient.receiver_name}${
+          selectedSource.currency ?? "USD"
+        )} successfully to ${recipient.receiver_name} from ${sourceLabel}${
           result.reference_number ? ` (${result.reference_number})` : ""
         }.`
       );
@@ -233,6 +324,7 @@ export default function CashboxSendForm({
       setRecipient(null);
       setAmount("");
       setConfirmationChecked(false);
+      setSourceValue(fundingSources[0]?.value ?? "cashbox:cashbox");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -358,21 +450,15 @@ export default function CashboxSendForm({
                   Send From
                 </label>
                 <select
-                  value={sourceAccountId}
-                  onChange={(e) => setSourceAccountId(e.target.value)}
+                  value={sourceValue}
+                  onChange={(e) => setSourceValue(e.target.value)}
                   className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none"
                 >
-                  {accounts.length === 0 ? (
-                    <option value="">No active account available</option>
-                  ) : (
-                    accounts.map((account) => (
-                      <option key={account.account_id} value={account.account_id}>
-                        {(account.account_name || account.account_type).toUpperCase()} • ****
-                        {account.account_number.slice(-4)} •{" "}
-                        {formatCurrency(account.balance, account.currency)}
-                      </option>
-                    ))
-                  )}
+                  {fundingSources.map((source) => (
+                    <option key={source.value} value={source.value}>
+                      {source.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -390,19 +476,23 @@ export default function CashboxSendForm({
                   className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500"
                 />
 
-                {selectedAccount ? (
+                {selectedSource ? (
                   <p className="mt-2 text-sm text-slate-400">
-                    Available balance:{" "}
+                    {selectedSource.type === "cashbox"
+                      ? "Available CashBox balance: "
+                      : "Available account balance: "}
                     {formatCurrency(
-                      selectedAccount.balance,
-                      selectedAccount.currency
+                      selectedSource.balance,
+                      selectedSource.currency
                     )}
                   </p>
                 ) : null}
 
                 {insufficientBalance ? (
                   <p className="mt-2 text-sm text-rose-400">
-                    The selected account does not have enough balance.
+                    {selectedSource?.type === "cashbox"
+                      ? "Your CashBox does not have enough balance."
+                      : "The selected account does not have enough balance."}
                   </p>
                 ) : null}
               </div>
@@ -424,7 +514,6 @@ export default function CashboxSendForm({
                 <button
                   type="button"
                   onClick={handleContinueToReview}
-                  disabled={accounts.length === 0}
                   className="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Continue
@@ -456,8 +545,10 @@ export default function CashboxSendForm({
                 <SummaryItem
                   label="Send From"
                   value={
-                    selectedAccount
-                      ? `${selectedAccount.account_name || selectedAccount.account_type} • ****${selectedAccount.account_number.slice(-4)}`
+                    selectedSource?.type === "cashbox"
+                      ? "CashBox"
+                      : selectedSource
+                      ? selectedSource.label.split(" • $")[0]
                       : "-"
                   }
                 />
@@ -465,7 +556,7 @@ export default function CashboxSendForm({
                   label="Amount"
                   value={formatCurrency(
                     numericAmount,
-                    selectedAccount?.currency ?? "USD"
+                    selectedSource?.currency ?? "USD"
                   )}
                 />
               </div>

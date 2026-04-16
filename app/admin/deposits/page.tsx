@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
+import { TransactionFilters, type TransactionFilters as TransactionFiltersType } from "@/components/admin/transaction-filters";
 
 type TransactionItem = {
   transaction_id: string;
@@ -99,6 +100,12 @@ export default function AdminDepositsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [filters, setFilters] = useState<TransactionFiltersType>({
+    dateSort: "desc",
+    minAmount: 10000,
+    minAmountDisplay: 10000,
+    amountThreshold: 10000,
+  });
 
   async function parseJsonResponse<T>(res: Response): Promise<T> {
     const contentType = res.headers.get("content-type") || "";
@@ -112,7 +119,7 @@ export default function AdminDepositsPage() {
     return JSON.parse(rawText) as T;
   }
 
-  async function loadTransactions(page = 1, options?: { referenceNumber?: string }) {
+  async function loadTransactions(page = 1, options?: { referenceNumber?: string; filters?: TransactionFiltersType }) {
     try {
       setLoading(true);
       setError("");
@@ -124,6 +131,28 @@ export default function AdminDepositsPage() {
 
       const searchRef = (options?.referenceNumber ?? referenceNumber).trim();
       if (searchRef) params.set("referenceNumber", searchRef);
+
+      const currentFilters = options?.filters || filters;
+      
+      // Add filter parameters
+      if (currentFilters.dateSort) {
+        params.set("dateSort", currentFilters.dateSort);
+      }
+      if (currentFilters.specificDate) {
+        params.set("specificDate", currentFilters.specificDate);
+      }
+      if (currentFilters.minAmount) {
+        params.set("minAmount", String(currentFilters.minAmount));
+      }
+      if (currentFilters.maxAmount) {
+        params.set("maxAmount", String(currentFilters.maxAmount));
+      }
+      if (currentFilters.cashboxOnly) {
+        params.set("cashboxOnly", "true");
+      }
+      if (currentFilters.transactionStatus && currentFilters.transactionStatus !== "all") {
+        params.set("transactionStatus", currentFilters.transactionStatus);
+      }
 
       const res = await fetch(`/api/admin/transactions/search?${params.toString()}`, {
         method: "GET",
@@ -163,12 +192,24 @@ export default function AdminDepositsPage() {
     await loadTransactions(1);
   }
 
+  async function handleFiltersChange(newFilters: TransactionFiltersType) {
+    setFilters(newFilters);
+    await loadTransactions(1, { filters: newFilters });
+  }
+
   async function handleClear() {
     const cleared = "";
     setReferenceNumber(cleared);
+    setFilters({
+      dateSort: "desc",
+      minAmount: 10000,
+      minAmountDisplay: 10000,
+      amountThreshold: 10000,
+    });
 
     await loadTransactions(1, {
       referenceNumber: cleared,
+      filters: { dateSort: "desc", minAmount: 10000 },
     });
   }
 
@@ -210,6 +251,14 @@ export default function AdminDepositsPage() {
           />
 
           <div className="flex gap-3">
+            <TransactionFilters
+              onFiltersChange={handleFiltersChange}
+              initialFilters={filters}
+              showTransactionType={false}
+              showCashboxFilter={false}
+              minAmountThreshold={10000}
+            />
+
             <button
               onClick={handleSearch}
               className="h-12 rounded-xl bg-cyan-500 px-6 font-semibold text-slate-950 transition hover:bg-cyan-400"
