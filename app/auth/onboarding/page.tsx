@@ -23,6 +23,17 @@ export default async function OnboardingPage() {
     redirect("/auth/login");
   }
 
+  // Redirect managers directly to dashboard - they don't need onboarding
+  const { data: appUser } = await supabase
+    .from("users")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (appUser?.role === "manager") {
+    redirect("/dashboard");
+  }
+
   const { data: customer } = await supabase
     .from("customers")
     .select("first_name, last_name")
