@@ -6,13 +6,20 @@ import { Landmark } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (user) redirect("/dashboard");
+
+  const { reason } = await searchParams;
+  const timedOut = reason === "timeout";
 
   return (
     <div className="dark min-h-svh bg-[#050816] text-white">
@@ -36,6 +43,11 @@ export default async function LoginPage() {
             </div>
 
             <div className="px-8 pb-8 pt-4">
+              {timedOut && (
+                <div className="mb-4 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
+                  You were signed out due to inactivity.
+                </div>
+              )}
               <Suspense fallback={null}>
                 <LoginForm />
               </Suspense>

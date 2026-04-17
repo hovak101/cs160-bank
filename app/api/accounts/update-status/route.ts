@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/require-role";
 
 type UpdateAccountStatusBody = {
   account_id?: string;
@@ -10,7 +10,9 @@ const ALLOWED_STATUSES = new Set(["active", "frozen", "closed"]);
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    const auth = await requireRole(["admin", "manager"]);
+    if (!auth.ok) return auth.response;
+    const { supabase } = auth;
     const body = (await req.json()) as UpdateAccountStatusBody;
 
     const accountId = body.account_id?.trim();

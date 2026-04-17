@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import DashboardLayout from "@/components/ui/dashboard-layout";
+import { IdleLogoutProvider } from "@/components/auth/idle-logout-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +26,9 @@ export default async function CustomerLayout({
 
   if (data?.role !== "customer") redirect("/auth/login");
 
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <IdleLogoutProvider>
+      <DashboardLayout>{children}</DashboardLayout>
+    </IdleLogoutProvider>
+  );
 }
