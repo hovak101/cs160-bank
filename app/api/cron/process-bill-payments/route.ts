@@ -1,15 +1,26 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { timingSafeEqual } from "crypto";
 
 // this runs every day at 8am via vercel cron
 // it finds all payments that are due and processes them
 export async function POST(request: Request) {
 
-  // // make sure only vercel cron can call this, not just anyone
-  // let authHeader = request.headers.get("authorization");
-  // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-  //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  // }
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "Server misconfigured" },
+      { status: 500 },
+    );
+  }
+
+  const authHeader = request.headers.get("authorization") ?? "";
+  const expected = `Bearer ${cronSecret}`;
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +28,7 @@ export async function POST(request: Request) {
   );
 
   // get todays date
-  let today = new Date().toISOString().split("T")[67];
+  let today = new Date().toISOString().split("T")[0];
 
   // find all active schedules where the payment date is today or past due
   let { data: dueSchedules } = await supabase

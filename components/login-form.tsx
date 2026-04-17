@@ -9,6 +9,7 @@ type AppUserStatus = {
   is_active: boolean | null;
   account_locked_until: string | null;
   deactivation_reason: string | null;
+  role?: string | null;
 };
 
 export function LoginForm() {
@@ -42,7 +43,7 @@ export function LoginForm() {
 
     const { data: rawAppUser, error: userError } = await supabase
       .from("users")
-      .select("is_active, account_locked_until, deactivation_reason")
+      .select("is_active, account_locked_until, deactivation_reason, role")
       .eq("user_id", userId)
       .single();
 
@@ -91,15 +92,21 @@ export function LoginForm() {
       return;
     }
 
-    const needsOnboarding =
-      !customer ||
-      !customer.first_name?.trim() ||
-      !customer.last_name?.trim();
-
-    if (needsOnboarding) {
-      router.push("/auth/onboarding");
-    } else {
+    // Skip onboarding for managers - redirect directly to dashboard
+    if (appUser?.role === "manager") {
       router.push("/dashboard");
+    } else {
+      // For regular customers, check if onboarding is needed
+      const needsOnboarding =
+        !customer ||
+        !customer.first_name?.trim() ||
+        !customer.last_name?.trim();
+
+      if (needsOnboarding) {
+        router.push("/auth/onboarding");
+      } else {
+        router.push("/dashboard");
+      }
     }
 
     router.refresh();

@@ -70,9 +70,26 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
+    {
+    label: "Deposits",
+    href: "/admin/deposits",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-5 w-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <path d="M22 2L11 13" />
+        <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+      </svg>
+    ),
+  },
   {
-    label: "Transfers",
-    href: "/admin/transfers",
+    label: "Withdrawals",
+    href: "/admin/withdrawals",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
