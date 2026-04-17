@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CashboxSendForm from "@/components/customer/cashbox-send-form";
+import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,10 @@ export default async function CashBoxSendPage() {
     status: account.status ?? "unknown",
   }));
 
+  const eligibleAccounts = accounts.filter((account) =>
+    isDepositEligible(account.account_type)
+  );
+
   let cashbox: CashboxRow | null = null;
 
   const { data: cashboxData } = await (supabase as any)
@@ -86,7 +91,7 @@ export default async function CashBoxSendPage() {
 
   return (
     <CashboxSendForm
-      accounts={accounts}
+      accounts={eligibleAccounts}
       cashboxBalance={cashboxBalance}
     />
   );

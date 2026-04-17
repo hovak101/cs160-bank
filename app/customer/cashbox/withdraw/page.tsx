@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CashboxWithdrawForm from "@/components/customer/cashbox-withdraw-form";
+import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -75,9 +76,13 @@ export default async function CashBoxWithdrawPage() {
     status: account.status ?? "unknown",
   }));
 
+  const eligibleAccounts = accounts.filter((account) =>
+    isDepositEligible(account.account_type)
+  );
+
   return (
     <CashboxWithdrawForm
-      accounts={accounts}
+      accounts={eligibleAccounts}
       cashboxBalance={cashboxBalance}
     />
   );

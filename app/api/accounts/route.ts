@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { buildCreditCardSeed, getCustomerDisplayName } from "@/lib/banking/server";
+import { getDefaultCreditTerms } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ export async function POST(request: Request) {
 
     const { data: customer, error: customerError } = await supabase
         .from("customers")
-        .select("customer_id")
+        .select("customer_id, first_name, last_name")
         .eq("user_id", user.id)
         .single();
         
@@ -64,6 +66,42 @@ export async function POST(request: Request) {
 
     if (createError) {
         return NextResponse.json({ error: createError.message }, { status: 500 });
+    }
+
+    if (dbAccountType === "credit") {
+        const creditTerms = getDefaultCreditTerms();
+
+        const { error: creditAccountError } = await supabase
+          .from("credit_accounts")
+          .insert({
+            account_id: newAccount.account_id,
+            ...creditTerms,
+          });
+
+        if (creditAccountError) {
+          await supabase.from("accounts").delete().eq("account_id", newAccount.account_id);
+          return NextResponse.json(
+            { error: creditAccountError.message || "Failed to create credit account details." },
+            { status: 500 }
+          );
+        }
+
+        const cardholderName = getCustomerDisplayName(customer);
+        const { error: creditCardError } = await supabase
+          .from("credit_cards")
+          .insert({
+            account_id: newAccount.account_id,
+            ...buildCreditCardSeed(cardholderName),
+          });
+
+        if (creditCardError) {
+          await supabase.from("credit_accounts").delete().eq("account_id", newAccount.account_id);
+          await supabase.from("accounts").delete().eq("account_id", newAccount.account_id);
+          return NextResponse.json(
+            { error: creditCardError.message || "Failed to issue credit card." },
+            { status: 500 }
+          );
+        }
     }
 
     return NextResponse.json(newAccount, { status: 201 });    

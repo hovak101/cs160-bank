@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DepositChequeForm } from "@/components/deposit-cheque-form";
+import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ export default async function DepositChequePage() {
     .eq("status", "active")
     .order("created_at", { ascending: true });
 
+  const depositEligibleAccounts =
+    (accounts ?? []).filter((account) => isDepositEligible(account.account_type));
+
   return (
     <div className="space-y-8">
       <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
@@ -48,7 +52,7 @@ export default async function DepositChequePage() {
         </div>
       </section>
 
-      <DepositChequeForm accounts={accounts ?? []} />
+      <DepositChequeForm accounts={depositEligibleAccounts} />
     </div>
   );
 }

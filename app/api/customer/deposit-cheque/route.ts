@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
 
     const { data: account, error: accountError } = await supabase
       .from("accounts")
-      .select("account_id, customer_id, balance, currency, status")
+      .select("account_id, customer_id, account_type, balance, currency, status")
       .eq("account_id", accountId)
       .eq("customer_id", customer.customer_id)
       .single();
@@ -83,6 +84,16 @@ export async function POST(req: Request) {
     if (account.status !== "active") {
       return NextResponse.json(
         { error: "Account is not active." },
+        { status: 400 }
+      );
+    }
+
+    if (!isDepositEligible(account.account_type)) {
+      return NextResponse.json(
+        {
+          error:
+            "Cheque deposits are only supported for checking and savings accounts. Pay credit cards through transfers instead.",
+        },
         { status: 400 }
       );
     }

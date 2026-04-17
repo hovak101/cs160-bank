@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  computeCreditCashAdvanceFee,
+  computeCreditMinimumPayment,
+  getAccountTypeLabel,
+  isCreditAccount,
+  isSavingsAccount,
+} from "@/lib/banking/rules";
+import {
+  getOrCreateSavingsMonthlyActivity,
+  getRemainingSavingsWithdrawalAllowance,
+} from "@/lib/banking/server";
+import { recordBankIncomeTransactions } from "@/lib/banking/bank-income";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +72,7 @@ export async function POST(req: Request) {
 
     const { data: account, error: accountError } = await supabase
       .from("accounts")
-      .select("account_id, customer_id, balance, currency, status")
+      .select("account_id, customer_id, account_name, account_type, balance, currency, status")
       .eq("account_id", accountId)
       .eq("customer_id", customer.customer_id)
       .single();
@@ -79,55 +91,224 @@ export async function POST(req: Request) {
       );
     }
 
+    const nowIso = new Date().toISOString();
     const currentBalance = Number(account.balance || 0);
 
-    if (amountValue > currentBalance) {
-      return NextResponse.json(
-        { error: "Insufficient funds. Withdrawal amount exceeds current balance." },
-        { status: 400 }
+    if (isCreditAccount(account.account_type)) {
+      const { data: creditAccount, error: creditAccountError } = await supabase
+        .from("credit_accounts")
+        .select(
+          "account_id, available_credit, current_balance, cash_advance_limit, cash_advance_balance"
+        )
+        .eq("account_id", account.account_id)
+        .single();
+
+      if (creditAccountError || !creditAccount) {
+        return NextResponse.json(
+          { error: "Credit card details not found." },
+          { status: 404 }
+        );
+      }
+
+      const feeAmount = computeCreditCashAdvanceFee(amountValue);
+      const availableCredit = Number(creditAccount.available_credit || 0);
+      const cashAdvanceRemaining = Math.max(
+        Number(creditAccount.cash_advance_limit || 0) -
+          Number(creditAccount.cash_advance_balance || 0),
+        0
       );
-    }
 
-    const newBalance = currentBalance - amountValue;
+      if (amountValue > cashAdvanceRemaining) {
+        return NextResponse.json(
+          {
+            error: `Cash advance limit exceeded. You can withdraw up to $${cashAdvanceRemaining.toFixed(
+              2
+            )} right now.`,
+          },
+          { status: 400 }
+        );
+      }
 
-    const { error: updateAccountError } = await supabase
-      .from("accounts")
-      .update({
-        balance: newBalance,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("account_id", account.account_id);
+      if (amountValue + feeAmount > availableCredit) {
+        return NextResponse.json(
+          {
+            error:
+              "Insufficient available credit to cover the cash advance and fee.",
+          },
+          { status: 400 }
+        );
+      }
 
-    if (updateAccountError) {
-      console.error("updateAccountError:", updateAccountError);
-      return NextResponse.json(
-        { error: updateAccountError.message || "Failed to update account." },
-        { status: 500 }
-      );
-    }
+      const nextCurrentBalance =
+        Number(creditAccount.current_balance || 0) + amountValue + feeAmount;
+      const nextCashAdvanceBalance =
+        Number(creditAccount.cash_advance_balance || 0) + amountValue;
 
-    const { error: transactionError } = await supabase
-      .from("transactions")
-      .insert({
-        reference_number: `WTH-${Date.now()}`,
-        source_account_id: account.account_id,
-        destination_account_id: null,
-        amount: amountValue,
-        transaction_type: "withdrawal",
-        status: "completed",
-        description: "Cash withdrawal",
-        executed_at: new Date().toISOString(),
-      });
+      const { error: updateCreditError } = await supabase
+        .from("credit_accounts")
+        .update({
+          current_balance: nextCurrentBalance,
+          cash_advance_balance: nextCashAdvanceBalance,
+          minimum_payment_due: computeCreditMinimumPayment(nextCurrentBalance),
+          last_payment_at: null,
+          updated_at: nowIso,
+        })
+        .eq("account_id", account.account_id);
 
-    if (transactionError) {
-      console.error("transactionError:", transactionError);
-      return NextResponse.json(
-        {
-          error:
-            transactionError.message || "Balance updated but transaction failed.",
-        },
-        { status: 500 }
-      );
+      if (updateCreditError) {
+        return NextResponse.json(
+          { error: updateCreditError.message || "Failed to process cash advance." },
+          { status: 500 }
+        );
+      }
+
+      const { data: insertedTransactions, error: transactionError } = await supabase
+        .from("transactions")
+        .insert([
+          {
+            reference_number: `CAD-${Date.now()}`,
+            source_account_id: account.account_id,
+            destination_account_id: null,
+            amount: amountValue,
+            transaction_type: "withdrawal",
+            status: "completed",
+            description: "Credit card cash advance",
+            executed_at: nowIso,
+          },
+          {
+            reference_number: `FEE-${Date.now()}`,
+            source_account_id: account.account_id,
+            destination_account_id: null,
+            amount: feeAmount,
+            transaction_type: "fee",
+            status: "completed",
+            description: "Credit card cash advance fee",
+            executed_at: nowIso,
+          },
+        ])
+        .select(
+          "transaction_id, source_account_id, reference_number, amount, transaction_type, description, executed_at, status"
+        );
+
+      if (transactionError) {
+        return NextResponse.json(
+          {
+            error:
+              transactionError.message ||
+              "Cash advance applied but transaction history failed.",
+          },
+          { status: 500 }
+        );
+      }
+
+      await recordBankIncomeTransactions(insertedTransactions ?? []);
+    } else {
+      let savingsMonthlyActivity:
+        | Awaited<ReturnType<typeof getOrCreateSavingsMonthlyActivity>>
+        | null = null;
+
+      if (amountValue > currentBalance) {
+        return NextResponse.json(
+          {
+            error:
+              "Insufficient funds. Withdrawal amount exceeds current balance.",
+          },
+          { status: 400 }
+        );
+      }
+
+      let savingsRuleMessage: string | null = null;
+
+      if (isSavingsAccount(account.account_type)) {
+        savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
+          supabase,
+          account.account_id,
+          currentBalance
+        );
+        const remainingAllowance =
+          getRemainingSavingsWithdrawalAllowance(savingsMonthlyActivity);
+
+        if (amountValue > remainingAllowance) {
+          return NextResponse.json(
+            {
+              error: `Savings accounts can only withdraw up to 10% of the monthly starting balance. Remaining allowance: $${remainingAllowance.toFixed(
+                2
+              )}.`,
+            },
+            { status: 400 }
+          );
+        }
+
+        savingsRuleMessage = "Savings monthly withdrawal rule applied.";
+      }
+
+      const newBalance = currentBalance - amountValue;
+
+      const { error: updateAccountError } = await supabase
+        .from("accounts")
+        .update({
+          balance: newBalance,
+          updated_at: nowIso,
+        })
+        .eq("account_id", account.account_id);
+
+      if (updateAccountError) {
+        console.error("updateAccountError:", updateAccountError);
+        return NextResponse.json(
+          { error: updateAccountError.message || "Failed to update account." },
+          { status: 500 }
+        );
+      }
+
+      if (savingsMonthlyActivity) {
+        const { error: activityError } = await supabase
+          .from("savings_monthly_activity")
+          .update({
+            withdrawn_amount:
+              Number(savingsMonthlyActivity.withdrawn_amount || 0) + amountValue,
+            updated_at: nowIso,
+          })
+          .eq("account_id", account.account_id)
+          .eq("month_key", savingsMonthlyActivity.month_key);
+
+        if (activityError) {
+          return NextResponse.json(
+            { error: activityError.message || "Failed to track savings withdrawal." },
+            { status: 500 }
+          );
+        }
+      }
+
+      const { error: transactionError } = await supabase
+        .from("transactions")
+        .insert({
+          reference_number: `WTH-${Date.now()}`,
+          source_account_id: account.account_id,
+          destination_account_id: null,
+          amount: amountValue,
+          transaction_type: "withdrawal",
+          status: "completed",
+          description:
+            account.account_type === "saving"
+              ? "Savings withdrawal"
+              : "Cash withdrawal",
+          executed_at: nowIso,
+        });
+
+      if (transactionError) {
+        console.error("transactionError:", transactionError);
+        return NextResponse.json(
+          {
+            error:
+              transactionError.message || "Balance updated but transaction failed.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (savingsRuleMessage) {
+        console.info(savingsRuleMessage);
+      }
     }
 
     revalidatePath("/customer/dashboard");
@@ -137,7 +318,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Withdrawal completed successfully.",
+      message: `${getAccountTypeLabel(account.account_type)} withdrawal completed successfully.`,
     });
   } catch (err) {
     console.error("withdraw route error:", err);

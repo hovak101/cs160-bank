@@ -430,6 +430,46 @@ function getTransactionMeta(
     };
   }
 
+  if (normalizedType === "credit_payment") {
+    return {
+      direction: "internal" as const,
+      title: "Credit Card Payment",
+      subtitle: tx.description || "Payment sent to your card balance",
+      fromLabel: sourceLabel || "Deposit account",
+      toLabel: destinationLabel || "Credit card",
+    };
+  }
+
+  if (normalizedType === "credit_purchase") {
+    return {
+      direction: "outgoing" as const,
+      title: "Credit Card Purchase",
+      subtitle: tx.description || "Card purchase posted",
+      fromLabel: sourceLabel || "Credit card",
+      toLabel: "Merchant",
+    };
+  }
+
+  if (normalizedType === "fee") {
+    return {
+      direction: "outgoing" as const,
+      title: "Fee Charged",
+      subtitle: tx.description || "Bank fee posted",
+      fromLabel: sourceLabel || "Account",
+      toLabel: "Bank",
+    };
+  }
+
+  if (normalizedType === "interest") {
+    return {
+      direction: "incoming" as const,
+      title: "Interest Credit",
+      subtitle: tx.description || "Interest credited",
+      fromLabel: "Bank",
+      toLabel: destinationLabel || "Your account",
+    };
+  }
+
   if (sourceOwned && destinationOwned) {
     return {
       direction: "internal" as const,
@@ -484,6 +524,14 @@ function formatTransactionType(type: string | null) {
     case "withdraw":
     case "withdrawal":
       return "Withdrawal";
+    case "credit_payment":
+      return "Credit Card Payment";
+    case "credit_purchase":
+      return "Credit Card Purchase";
+    case "fee":
+      return "Fee";
+    case "interest":
+      return "Interest Credit";
     case "transfer":
       return "Transfer";
     default:

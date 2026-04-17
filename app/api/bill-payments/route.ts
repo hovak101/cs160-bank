@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isCheckingAccount } from "@/lib/banking/rules";
 
 // get all bill payment schedules for the logged in user
 export async function GET() {
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
 
   let { data: sourceAccount } = await supabase
     .from("accounts")
-    .select("account_id, status")
+    .select("account_id, account_type, status")
     .eq("account_id", account_id)
     .eq("customer_id", customerData!.customer_id)
     .single();
@@ -106,6 +107,13 @@ export async function POST(request: Request) {
 
   if (sourceAccount.status !== "active") {
     return NextResponse.json({ error: "That account is not active." }, { status: 400 });
+  }
+
+  if (!isCheckingAccount(sourceAccount.account_type)) {
+    return NextResponse.json(
+      { error: "Bill pay schedules must be funded from a checking account." },
+      { status: 400 }
+    );
   }
 
   // save the new schedule to the database

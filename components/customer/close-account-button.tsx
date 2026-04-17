@@ -1,5 +1,6 @@
 "use client";
 
+import type { MouseEvent } from "react";
 import { useState } from "react";
 
 export function CloseAccountButton({ accountId, status }: { accountId: string; status: string }) {
@@ -7,7 +8,10 @@ export function CloseAccountButton({ accountId, status }: { accountId: string; s
 
   if (status === "closed") return null;
 
-  async function handleCloseAccount() {
+  async function handleCloseAccount(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
     const confirmed = confirm("Are you sure you want to close this account? Cannot undo this");
     if (!confirmed) return;
 
@@ -31,6 +35,7 @@ export function CloseAccountButton({ accountId, status }: { accountId: string; s
   return (
     <button
       onClick={handleCloseAccount}
+      type="button"
       disabled={loading}
       className="text-xs text-red-400 hover:text-red-600 font-semibold uppercase tracking-widest disabled:opacity-50"
     >

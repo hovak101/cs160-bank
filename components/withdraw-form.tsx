@@ -9,6 +9,12 @@ import {
   AlertCircle,
   Banknote,
 } from "lucide-react";
+import {
+  computeCreditCashAdvanceFee,
+  getAccountTypeLabel,
+  isCreditAccount,
+  isSavingsAccount,
+} from "@/lib/banking/rules";
 
 type Account = {
   account_id: string;
@@ -34,6 +40,12 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
 
   const availableBalance = Number(selectedAccountData?.balance ?? 0);
   const currency = selectedAccountData?.currency ?? "USD";
+  const isCreditWithdrawal =
+    !!selectedAccountData && isCreditAccount(selectedAccountData.account_type);
+  const feeAmount = isCreditWithdrawal
+    ? computeCreditCashAdvanceFee(Number(amount || 0))
+    : 0;
+  const totalCreditImpact = Number(amount || 0) + feeAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +64,7 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
       return;
     }
 
-    if (numericAmount > availableBalance) {
+    if (!isCreditWithdrawal && numericAmount > availableBalance) {
       setError("Insufficient funds. You cannot withdraw more than your current balance.");
       return;
     }
@@ -77,7 +89,11 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
 
         setAmount("");
         router.refresh();
-        setMessage("Withdrawal completed successfully.");
+        setMessage(
+          isCreditWithdrawal
+            ? "Cash advance completed successfully."
+            : "Withdrawal completed successfully."
+        );
       } catch {
         setError("Something went wrong while processing the withdrawal.");
       }
@@ -110,7 +126,7 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
         <div>
           <h2 className="text-xl font-bold text-white">Withdrawal Details</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Choose an account and enter an amount that does not exceed the current balance.
+            Checking accounts withdraw freely, savings withdrawals are limited monthly, and credit withdrawals are treated as cash advances with fees.
           </p>
         </div>
 
@@ -130,7 +146,7 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
             <option value="">Choose an account</option>
             {accounts.map((account) => (
               <option key={account.account_id} value={account.account_id}>
-                {account.account_name} • {account.account_type} • ****
+                {account.account_name} • {getAccountTypeLabel(account.account_type)} • ****
                 {account.account_number?.slice(-4)}
               </option>
             ))}
@@ -156,7 +172,9 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
 
         {selectedAccountData ? (
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-            <p className="text-sm font-medium text-slate-400">Available Balance</p>
+            <p className="text-sm font-medium text-slate-400">
+              {isCreditWithdrawal ? "Current Deposit Balance" : "Available Balance"}
+            </p>
             <p className="mt-1 text-2xl font-bold text-white">
               {formatCurrency(availableBalance, currency)}
             </p>
@@ -164,6 +182,16 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
               Account: {selectedAccountData.account_name} • ****
               {selectedAccountData.account_number?.slice(-4)}
             </p>
+            {isSavingsAccount(selectedAccountData.account_type) ? (
+              <p className="mt-2 text-xs text-amber-300">
+                Savings withdrawals are capped at 10% of the month-opening balance.
+              </p>
+            ) : null}
+            {isCreditWithdrawal ? (
+              <p className="mt-2 text-xs text-amber-300">
+                Credit cash advances begin accruing interest immediately and include a cash advance fee.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -191,6 +219,8 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
               <Loader2 size={18} className="mr-2 animate-spin" />
               Processing...
             </>
+          ) : isCreditWithdrawal ? (
+            "Take Cash Advance"
           ) : (
             "Withdraw Money"
           )}
@@ -212,6 +242,13 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
                 : "No account selected"}
             </p>
 
+            <p className="mt-4 text-sm text-slate-400">Account Type</p>
+            <p className="mt-1 text-base font-semibold text-white">
+              {selectedAccountData
+                ? getAccountTypeLabel(selectedAccountData.account_type)
+                : "N/A"}
+            </p>
+
             <p className="mt-4 text-sm text-slate-400">Withdrawal Amount</p>
             <p className="mt-1 text-base font-semibold text-white">
               {amount && Number(amount) > 0
@@ -219,15 +256,31 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
                 : formatCurrency(0, currency)}
             </p>
 
-            <p className="mt-4 text-sm text-slate-400">Remaining Balance</p>
-            <p className="mt-1 text-base font-semibold text-white">
-              {selectedAccountData
-                ? formatCurrency(
-                    Math.max(availableBalance - Number(amount || 0), 0),
-                    currency
-                  )
-                : formatCurrency(0, currency)}
-            </p>
+            {isCreditWithdrawal ? (
+              <>
+                <p className="mt-4 text-sm text-slate-400">Cash Advance Fee</p>
+                <p className="mt-1 text-base font-semibold text-white">
+                  {formatCurrency(feeAmount, currency)}
+                </p>
+
+                <p className="mt-4 text-sm text-slate-400">Total Added to Card Balance</p>
+                <p className="mt-1 text-base font-semibold text-white">
+                  {formatCurrency(totalCreditImpact, currency)}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-4 text-sm text-slate-400">Remaining Balance</p>
+                <p className="mt-1 text-base font-semibold text-white">
+                  {selectedAccountData
+                    ? formatCurrency(
+                        Math.max(availableBalance - Number(amount || 0), 0),
+                        currency
+                      )
+                    : formatCurrency(0, currency)}
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -237,8 +290,7 @@ export function WithdrawForm({ accounts }: { accounts: Account[] }) {
             <h3 className="text-lg font-bold text-white">Important Note</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            For this demo, withdrawals are processed instantly after submission.
-            The system will reject any amount greater than the available balance.
+            Checking withdrawals use your account balance directly. Savings accounts are limited to 10% of the month-opening balance, while credit card withdrawals act like cash advances and add both the withdrawal amount and fee to your card balance.
           </p>
         </div>
       </div>

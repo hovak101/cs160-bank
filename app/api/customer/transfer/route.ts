@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  computeCreditMinimumPayment,
+  isCreditAccount,
+  isSavingsAccount,
+} from "@/lib/banking/rules";
+import {
+  getOrCreateSavingsMonthlyActivity,
+  getRemainingSavingsWithdrawalAllowance,
+} from "@/lib/banking/server";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +84,7 @@ export async function POST(req: Request) {
 
     const { data: sourceAccount, error: sourceError } = await supabase
       .from("accounts")
-      .select("account_id, customer_id, balance, currency, status")
+      .select("account_id, customer_id, account_type, balance, currency, status")
       .eq("account_id", fromAccountId)
       .eq("customer_id", customer.customer_id)
       .single();
@@ -94,9 +103,19 @@ export async function POST(req: Request) {
       );
     }
 
+    if (isCreditAccount(sourceAccount.account_type)) {
+      return NextResponse.json(
+        {
+          error:
+            "Credit cards cannot be used as the source of an internal transfer. Pay the card from checking or savings instead.",
+        },
+        { status: 400 }
+      );
+    }
+
     const { data: destAccount, error: destError } = await supabase
       .from("accounts")
-      .select("account_id, customer_id, balance, currency, status")
+      .select("account_id, customer_id, account_type, balance, currency, status")
       .eq("account_id", toAccountId)
       .eq("customer_id", customer.customer_id)
       .single();
@@ -124,11 +143,38 @@ export async function POST(req: Request) {
       );
     }
 
+    let savingsMonthlyActivity:
+      | Awaited<ReturnType<typeof getOrCreateSavingsMonthlyActivity>>
+      | null = null;
+
+    if (isSavingsAccount(sourceAccount.account_type)) {
+      savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
+        supabase,
+        sourceAccount.account_id,
+        sourceBalance
+      );
+      const remainingAllowance =
+        getRemainingSavingsWithdrawalAllowance(savingsMonthlyActivity);
+
+      if (amountValue > remainingAllowance) {
+        return NextResponse.json(
+          {
+            error: `Savings transfer exceeds your monthly 10% withdrawal allowance. Remaining allowance: $${remainingAllowance.toFixed(
+              2
+            )}.`,
+          },
+            { status: 400 }
+          );
+        }
+    }
+
+    const nowIso = new Date().toISOString();
+
     const { error: updateSourceError } = await supabase
       .from("accounts")
       .update({
         balance: sourceBalance - amountValue,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       })
       .eq("account_id", sourceAccount.account_id);
 
@@ -140,22 +186,101 @@ export async function POST(req: Request) {
       );
     }
 
+    if (savingsMonthlyActivity) {
+      const { error: activityError } = await supabase
+        .from("savings_monthly_activity")
+        .update({
+          withdrawn_amount:
+            Number(savingsMonthlyActivity.withdrawn_amount || 0) + amountValue,
+          updated_at: nowIso,
+        })
+        .eq("account_id", sourceAccount.account_id)
+        .eq("month_key", savingsMonthlyActivity.month_key);
+
+      if (activityError) {
+        return NextResponse.json(
+          { error: activityError.message || "Failed to track savings transfer." },
+          { status: 500 }
+        );
+      }
+    }
+
     const destBalance = Number(destAccount.balance || 0);
 
-    const { error: updateDestError } = await supabase
-      .from("accounts")
-      .update({
-        balance: destBalance + amountValue,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("account_id", destAccount.account_id);
+    let transactionType: "transfer" | "credit_payment" = "transfer";
+    let description = "Account transfer";
 
-    if (updateDestError) {
-      console.error("updateDestError:", updateDestError);
-      return NextResponse.json(
-        { error: updateDestError.message || "Failed to update destination account." },
-        { status: 500 }
-      );
+    if (isCreditAccount(destAccount.account_type)) {
+      const { data: creditAccount, error: creditAccountError } = await supabase
+        .from("credit_accounts")
+        .select("account_id, current_balance")
+        .eq("account_id", destAccount.account_id)
+        .single();
+
+      if (creditAccountError || !creditAccount) {
+        return NextResponse.json(
+          { error: "Credit card details not found." },
+          { status: 404 }
+        );
+      }
+
+      const outstandingBalance = Number(creditAccount.current_balance || 0);
+
+      if (outstandingBalance <= 0) {
+        return NextResponse.json(
+          { error: "This credit card does not have an outstanding balance." },
+          { status: 400 }
+        );
+      }
+
+      if (amountValue > outstandingBalance) {
+        return NextResponse.json(
+          {
+            error: `Payment exceeds the current credit balance. Outstanding balance: $${outstandingBalance.toFixed(
+              2
+            )}.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const nextCreditBalance = outstandingBalance - amountValue;
+
+      const { error: updateCreditError } = await supabase
+        .from("credit_accounts")
+        .update({
+          current_balance: nextCreditBalance,
+          minimum_payment_due: computeCreditMinimumPayment(nextCreditBalance),
+          last_payment_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq("account_id", destAccount.account_id);
+
+      if (updateCreditError) {
+        return NextResponse.json(
+          { error: updateCreditError.message || "Failed to apply credit payment." },
+          { status: 500 }
+        );
+      }
+
+      transactionType = "credit_payment";
+      description = "Credit card payment";
+    } else {
+      const { error: updateDestError } = await supabase
+        .from("accounts")
+        .update({
+          balance: destBalance + amountValue,
+          updated_at: nowIso,
+        })
+        .eq("account_id", destAccount.account_id);
+
+      if (updateDestError) {
+        console.error("updateDestError:", updateDestError);
+        return NextResponse.json(
+          { error: updateDestError.message || "Failed to update destination account." },
+          { status: 500 }
+        );
+      }
     }
 
     const { error: transactionError } = await supabase
@@ -165,10 +290,10 @@ export async function POST(req: Request) {
         source_account_id: sourceAccount.account_id,
         destination_account_id: destAccount.account_id,
         amount: amountValue,
-        transaction_type: "transfer",
+        transaction_type: transactionType,
         status: "completed",
-        description: "Account transfer",
-        executed_at: new Date().toISOString(),
+        description,
+        executed_at: nowIso,
       });
 
     if (transactionError) {
