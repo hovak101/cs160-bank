@@ -76,7 +76,15 @@ export type Database = {
           status?: Database["public"]["Enums"]["account_status"]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "accounts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["customer_id"]
+          },
+        ]
       }
       bill_schedules: {
         Row: {
@@ -128,6 +136,38 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["account_id"]
+          },
+        ]
+      }
+      cashboxes: {
+        Row: {
+          balance: number
+          cashbox_id: string
+          created_at: string
+          customer_id: string
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          cashbox_id?: string
+          created_at?: string
+          customer_id: string
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          cashbox_id?: string
+          created_at?: string
+          customer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashboxes_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: true
+            referencedRelation: "customers"
+            referencedColumns: ["customer_id"]
           },
         ]
       }
@@ -195,6 +235,7 @@ export type Database = {
           created_at: string | null
           employee_id: string | null
           first_name: string | null
+          is_active: boolean
           last_name: string | null
           manager_id: string
           user_id: string
@@ -203,6 +244,7 @@ export type Database = {
           created_at?: string | null
           employee_id?: string | null
           first_name?: string | null
+          is_active?: boolean
           last_name?: string | null
           manager_id?: string
           user_id: string
@@ -211,6 +253,7 @@ export type Database = {
           created_at?: string | null
           employee_id?: string | null
           first_name?: string | null
+          is_active?: boolean
           last_name?: string | null
           manager_id?: string
           user_id?: string
@@ -328,6 +371,7 @@ export type Database = {
         Row: {
           account_locked_until: string | null
           created_at: string | null
+          deactivation_reason: string | null
           email: string
           failed_login_attempts: number | null
           is_active: boolean | null
@@ -340,6 +384,7 @@ export type Database = {
         Insert: {
           account_locked_until?: string | null
           created_at?: string | null
+          deactivation_reason?: string | null
           email: string
           failed_login_attempts?: number | null
           is_active?: boolean | null
@@ -352,6 +397,7 @@ export type Database = {
         Update: {
           account_locked_until?: string | null
           created_at?: string | null
+          deactivation_reason?: string | null
           email?: string
           failed_login_attempts?: number | null
           is_active?: boolean | null
