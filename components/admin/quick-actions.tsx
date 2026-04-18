@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   ArrowRightLeft,
   Building2,
+  HandCoins,
   ShieldCheck,
   UserCog,
   Users,
@@ -33,6 +34,12 @@ const actions = [
     href: "/admin/withdrawals",
     description: "Track outgoing cash and exceptions quickly.",
     icon: ArrowUpRight,
+  },
+  {
+    name: "Loans",
+    href: "/admin/loans",
+    description: "Approve applications and watch outstanding balances.",
+    icon: HandCoins,
   },
   {
     name: "User Management",

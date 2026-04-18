@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ChevronRight,
   DollarSign,
+  HandCoins,
   Landmark,
   LineChart,
   PiggyBank,
@@ -21,6 +22,7 @@ type AccountRow = {
   account_id: string;
   balance: number | null;
   account_type: string | null;
+  status: string | null;
 };
 
 type BankIncomeRow = {
@@ -29,6 +31,20 @@ type BankIncomeRow = {
   description: string | null;
   reference_number: string | null;
   recognized_at: string | null;
+};
+
+type CreditExposureRow = {
+  account_id: string;
+  credit_accounts:
+    | { current_balance: number | null }
+    | { current_balance: number | null }[]
+    | null;
+};
+
+type LoanRow = {
+  accrued_interest: number | null;
+  outstanding_principal: number | null;
+  status: string | null;
 };
 
 export async function AdminDashboardStats() {
@@ -49,9 +65,11 @@ export async function AdminDashboardStats() {
     { data: currentIncomeData },
     { data: previousIncomeData },
     { data: recentIncomeData },
+    { data: creditExposureData },
+    loansResult,
   ] = await Promise.all([
     supabase.from("customers").select("customer_id"),
-    supabase.from("accounts").select("account_id, balance, account_type"),
+    supabase.from("accounts").select("account_id, balance, account_type, status"),
     supabase
       .from("transactions")
       .select("amount, transaction_type, status, executed_at")
@@ -70,6 +88,7 @@ export async function AdminDashboardStats() {
       .gte("executed_at", sixMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
       .eq("status", "completed"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("bank_income")
       .select(
@@ -77,6 +96,7 @@ export async function AdminDashboardStats() {
       )
       .gte("recognized_at", currentMonthStart.toISOString())
       .lt("recognized_at", nextMonthStart.toISOString()),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("bank_income")
       .select(
@@ -84,6 +104,7 @@ export async function AdminDashboardStats() {
       )
       .gte("recognized_at", previousMonthStart.toISOString())
       .lt("recognized_at", currentMonthStart.toISOString()),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("bank_income")
       .select(
@@ -91,6 +112,15 @@ export async function AdminDashboardStats() {
       )
       .order("recognized_at", { ascending: false })
       .limit(8),
+    supabase
+      .from("accounts")
+      .select("account_id, credit_accounts(current_balance)")
+      .eq("account_type", "credit")
+      .eq("status", "active"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("loans")
+      .select("outstanding_principal, accrued_interest, status"),
   ]);
 
   const customers = customersData ?? [];
@@ -101,15 +131,22 @@ export async function AdminDashboardStats() {
   const currentIncome = (currentIncomeData ?? []) as BankIncomeRow[];
   const previousIncome = (previousIncomeData ?? []) as BankIncomeRow[];
   const recentIncome = (recentIncomeData ?? []) as BankIncomeRow[];
+  const creditExposure = (creditExposureData ?? []) as CreditExposureRow[];
+  const loans = ((loansResult as { data?: LoanRow[] } | null)?.data ?? []) as LoanRow[];
 
   const totalCustomers = customers.length;
-  const totalAccounts = accounts.length;
-  const totalAssets = accounts.reduce(
+  const activeAccounts = accounts.filter((account) => account.status === "active");
+  const totalAccounts = activeAccounts.length;
+  const depositAccounts = activeAccounts.filter((account) =>
+    isWithdrawableAccountType(account.account_type)
+  );
+  const withdrawableDeposits = depositAccounts.reduce(
     (sum, acc) => sum + Number(acc.balance || 0),
     0
   );
-  const avgBalance = totalAccounts > 0 ? totalAssets / totalAccounts : 0;
-  const largestAccountBalance = accounts.reduce(
+  const avgDepositBalance =
+    depositAccounts.length > 0 ? withdrawableDeposits / depositAccounts.length : 0;
+  const largestDepositBalance = depositAccounts.reduce(
     (max, acc) => Math.max(max, Number(acc.balance || 0)),
     0
   );
@@ -139,6 +176,52 @@ export async function AdminDashboardStats() {
     currentIncome,
     "interest_charge"
   );
+  const activeLoans = loans.filter((loan) => loan.status === "active");
+  const activeLoanCount = activeLoans.length;
+  const outstandingLoanBalance = activeLoans.reduce(
+    (sum, loan) =>
+      sum +
+      Number(loan.outstanding_principal || 0) +
+      Number(loan.accrued_interest || 0),
+    0
+  );
+  const outstandingCreditBalance = creditExposure.reduce((sum, account) => {
+    const creditAccount = Array.isArray(account.credit_accounts)
+      ? account.credit_accounts[0]
+      : account.credit_accounts;
+
+    return sum + Number(creditAccount?.current_balance || 0);
+  }, 0);
+  const activeCreditBalanceCount = creditExposure.filter((account) => {
+    const creditAccount = Array.isArray(account.credit_accounts)
+      ? account.credit_accounts[0]
+      : account.credit_accounts;
+
+    return Number(creditAccount?.current_balance || 0) > 0;
+  }).length;
+  const totalLentOut = outstandingLoanBalance + outstandingCreditBalance;
+  const estimatedLiquidCash = Math.max(withdrawableDeposits - totalLentOut, 0);
+  const liquidityGap = withdrawableDeposits - totalLentOut;
+  const potentialShortfall = Math.max(totalLentOut - withdrawableDeposits, 0);
+  const withdrawalCoverage =
+    withdrawableDeposits > 0
+      ? estimatedLiquidCash / withdrawableDeposits
+      : totalLentOut > 0
+        ? 0
+        : 1;
+  const loanToDepositRatio =
+    withdrawableDeposits > 0
+      ? totalLentOut / withdrawableDeposits
+      : totalLentOut > 0
+        ? Number.POSITIVE_INFINITY
+        : 0;
+  const bankHealth = assessBankHealth({
+    withdrawableDeposits,
+    totalLentOut,
+    withdrawalCoverage,
+    potentialShortfall,
+    loanToDepositRatio,
+  });
   const previousBankIncome = sumIncome(previousIncome);
   const incomeGrowth =
     previousBankIncome === 0
@@ -154,13 +237,14 @@ export async function AdminDashboardStats() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
-                Operations
+                Real Cash Position
               </p>
               <h2 className="mt-3 text-3xl font-bold text-white">
-                {formatCurrency(totalAssets)}
+                {formatCurrency(withdrawableDeposits)}
               </h2>
               <p className="mt-2 text-sm text-slate-400">
-                Total assets currently held across all customer accounts.
+                Checking and saving balances customers can withdraw today. Loans
+                and credit balances are tracked separately below.
               </p>
             </div>
 
@@ -191,6 +275,9 @@ export async function AdminDashboardStats() {
             <TrendPill label="Volume vs last month" value={volumeGrowth} />
             <p className="text-slate-500">
               Last month: {formatCurrency(previousVolume)}
+            </p>
+            <p className="text-slate-500">
+              Estimated liquid cash: {formatCurrency(estimatedLiquidCash)}
             </p>
           </div>
         </section>
@@ -246,13 +333,13 @@ export async function AdminDashboardStats() {
         <CompactStatCard
           title="Total Accounts"
           value={String(totalAccounts)}
-          subtitle="All account types"
+          subtitle="Active account records"
           icon={<Landmark className="h-4 w-4 text-cyan-400" />}
         />
         <CompactStatCard
-          title="Average Balance"
-          value={formatCurrency(avgBalance)}
-          subtitle="Per account average"
+          title="Average Deposit Balance"
+          value={formatCurrency(avgDepositBalance)}
+          subtitle="Checking + saving only"
           icon={<PiggyBank className="h-4 w-4 text-cyan-400" />}
         />
         <CompactStatCard
@@ -261,6 +348,135 @@ export async function AdminDashboardStats() {
           subtitle="Completed this month"
           icon={<CheckCircle2 className="h-4 w-4 text-cyan-400" />}
         />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+        <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
+                Lending Exposure
+              </p>
+              <h2 className="mt-3 text-3xl font-bold text-white">
+                {formatCurrency(totalLentOut)}
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Total amount the bank currently has lent out across approved
+                loans and active credit card balances.
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-cyan-400/10 p-3">
+              <HandCoins className="h-5 w-5 text-cyan-400" />
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <KpiMiniCard
+              label="Loan Bills Due"
+              value={formatCurrency(outstandingLoanBalance)}
+              tone="warning"
+            />
+            <KpiMiniCard
+              label="Credit Balances"
+              value={formatCurrency(outstandingCreditBalance)}
+              tone="warning"
+            />
+            <KpiMiniCard
+              label="Interest Income"
+              value={formatCurrency(currentInterestChargeIncome)}
+              tone="neutral"
+            />
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4 text-sm">
+            <div className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-cyan-300">
+              <span>{activeLoanCount}</span>
+              <span>active loans</span>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-slate-950/60 px-3 py-1.5 text-slate-300">
+              <span>{activeCreditBalanceCount}</span>
+              <span>cards carrying balance</span>
+            </div>
+            <p className="text-slate-500">
+              Approved loan bills already include fixed interest for the full term.
+            </p>
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
+                Bank Health
+              </p>
+              <h2 className={`mt-3 text-3xl font-bold ${bankHealth.headingClass}`}>
+                {bankHealth.label}
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">
+                {bankHealth.summary}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-cyan-400/10 p-3">
+              <Landmark className="h-5 w-5 text-cyan-400" />
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <KpiMiniCard
+              label="Withdrawable Deposits"
+              value={formatCurrency(withdrawableDeposits)}
+              tone="neutral"
+            />
+            <KpiMiniCard
+              label="Funds Lent Out"
+              value={formatCurrency(totalLentOut)}
+              tone="warning"
+            />
+            <KpiMiniCard
+              label="Estimated Liquid Cash"
+              value={formatCurrency(estimatedLiquidCash)}
+              tone={potentialShortfall > 0 ? "danger" : "positive"}
+            />
+            <KpiMiniCard
+              label="Loan-to-Deposit"
+              value={formatPercent(loanToDepositRatio)}
+              tone={loanToDepositRatio > 1 ? "danger" : loanToDepositRatio > 0.85 ? "warning" : "positive"}
+            />
+            <KpiMiniCard
+              label="Withdrawal Coverage"
+              value={formatPercent(withdrawalCoverage)}
+              tone={withdrawalCoverage < 0.2 ? "danger" : withdrawalCoverage < 0.4 ? "warning" : "positive"}
+            />
+            <KpiMiniCard
+              label="Liquidity Gap"
+              value={formatSignedCurrency(liquidityGap)}
+              tone={liquidityGap < 0 ? "danger" : "positive"}
+            />
+          </div>
+
+          <div
+            className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
+              potentialShortfall > 0
+                ? "border-red-400/20 bg-red-400/10 text-red-200"
+                : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+            }`}
+          >
+            {potentialShortfall > 0
+              ? `If every customer tried to withdraw all checking and saving balances now, the bank would face an estimated cash shortfall of ${formatCurrency(
+                  potentialShortfall
+                )}.`
+              : `If every customer withdrew now, the bank still has an estimated liquidity cushion of ${formatCurrency(
+                  estimatedLiquidCash
+                )}.`}
+          </div>
+
+          <p className="mt-4 text-xs text-slate-500">
+            Demo health view inspired by loan-to-deposit and liquidity coverage
+            concepts, not a full regulatory capital or liquidity report.
+          </p>
+        </section>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.35fr_0.9fr]">
@@ -323,6 +539,7 @@ export async function AdminDashboardStats() {
                 segments={[
                   { value: accountMix.checking, color: "#22d3ee" },
                   { value: accountMix.saving, color: "#a78bfa" },
+                  { value: accountMix.credit, color: "#f59e0b" },
                   { value: accountMix.other, color: "#64748b" },
                 ]}
               />
@@ -339,6 +556,11 @@ export async function AdminDashboardStats() {
                   value={accountMix.saving}
                 />
                 <LegendRow
+                  color="bg-amber-400"
+                  label="Credit"
+                  value={accountMix.credit}
+                />
+                <LegendRow
                   color="bg-slate-500"
                   label="Other"
                   value={accountMix.other}
@@ -350,12 +572,12 @@ export async function AdminDashboardStats() {
           <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm text-slate-400">Largest Account Balance</p>
+                <p className="text-sm text-slate-400">Largest Deposit Balance</p>
                 <h3 className="mt-3 text-3xl font-bold text-white">
-                  {formatCurrency(largestAccountBalance)}
+                  {formatCurrency(largestDepositBalance)}
                 </h3>
                 <p className="mt-2 text-sm text-slate-500">
-                  Highest single account balance currently on record.
+                  Highest checking or saving balance currently on record.
                 </p>
               </div>
               <div className="rounded-2xl bg-cyan-400/10 p-3">
@@ -478,11 +700,13 @@ function KpiMiniCard({
 }: {
   label: string;
   value: string;
-  tone: "neutral" | "positive" | "warning";
+  tone: "neutral" | "positive" | "warning" | "danger";
 }) {
   const toneClass =
     tone === "positive"
       ? "text-emerald-400"
+      : tone === "danger"
+        ? "text-red-300"
       : tone === "warning"
         ? "text-amber-400"
         : "text-white";
@@ -603,6 +827,7 @@ function sumByType(rows: TxRow[], types: string[]) {
 function buildAccountMix(accounts: AccountRow[]) {
   let checking = 0;
   let saving = 0;
+  let credit = 0;
   let other = 0;
 
   for (const acc of accounts) {
@@ -610,10 +835,11 @@ function buildAccountMix(accounts: AccountRow[]) {
 
     if (type.includes("checking")) checking += 1;
     else if (type.includes("saving")) saving += 1;
+    else if (type.includes("credit")) credit += 1;
     else other += 1;
   }
 
-  return { checking, saving, other };
+  return { checking, saving, credit, other };
 }
 
 function buildMonthlySeries(rows: TxRow[]) {
@@ -664,11 +890,73 @@ function sumIncomeByCategory(rows: BankIncomeRow[], category: string) {
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
 }
 
+function isWithdrawableAccountType(value: string | null) {
+  const normalized = (value || "").toLowerCase();
+  return normalized.includes("checking") || normalized.includes("saving");
+}
+
+function assessBankHealth({
+  withdrawableDeposits,
+  totalLentOut,
+  withdrawalCoverage,
+  potentialShortfall,
+  loanToDepositRatio,
+}: {
+  withdrawableDeposits: number;
+  totalLentOut: number;
+  withdrawalCoverage: number;
+  potentialShortfall: number;
+  loanToDepositRatio: number;
+}) {
+  if (withdrawableDeposits <= 0 && totalLentOut <= 0) {
+    return {
+      label: "Idle",
+      summary: "No active deposits or lending are on the books yet.",
+      headingClass: "text-white",
+    };
+  }
+
+  if (
+    potentialShortfall > 0 ||
+    withdrawalCoverage < 0.2 ||
+    loanToDepositRatio > 1
+  ) {
+    return {
+      label: "Risky",
+      summary:
+        "Lending is consuming too much of the deposit base, so a full withdrawal wave would likely stress cash availability.",
+      headingClass: "text-red-300",
+    };
+  }
+
+  if (withdrawalCoverage < 0.4 || loanToDepositRatio > 0.85) {
+    return {
+      label: "Watch",
+      summary:
+        "The bank is still functioning, but liquidity is getting tighter and should be monitored before more lending is approved.",
+      headingClass: "text-amber-300",
+    };
+  }
+
+  return {
+    label: "Healthy",
+    summary:
+      "Liquid cash still covers a meaningful share of deposits, so the current lending book looks manageable for this demo bank.",
+    headingClass: "text-emerald-300",
+  };
+}
+
 function formatIncomeCategory(value: string | null) {
   const normalized = (value || "").toLowerCase();
   if (normalized === "fee") return "Fee";
   if (normalized === "interest_charge") return "Interest Charge";
   return "Income";
+}
+
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return "N/A";
+
+  return `${(value * 100).toFixed(1)}%`;
 }
 
 function formatCurrency(amount: number) {
@@ -677,6 +965,14 @@ function formatCurrency(amount: number) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(Number(amount || 0));
+}
+
+function formatSignedCurrency(amount: number) {
+  const absoluteValue = formatCurrency(Math.abs(amount));
+
+  if (amount > 0) return `+${absoluteValue}`;
+  if (amount < 0) return `-${absoluteValue}`;
+  return absoluteValue;
 }
 
 function formatDateTime(value: string | null) {

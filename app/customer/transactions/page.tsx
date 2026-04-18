@@ -27,6 +27,11 @@ type Transaction = {
   executed_at: string | null;
 };
 
+type TransactionQueryResult = {
+  data: Transaction[];
+  error: null;
+};
+
 export default async function CustomerTransactionsPage() {
   const supabase = await createClient();
 
@@ -83,7 +88,7 @@ export default async function CustomerTransactionsPage() {
           `)
           .or(accountOrQuery)
           .order("executed_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null } as any);
+      : Promise.resolve<TransactionQueryResult>({ data: [], error: null });
 
   const incomingCashboxPromise = currentPhoneDigits
     ? supabase
@@ -102,7 +107,7 @@ export default async function CustomerTransactionsPage() {
         .eq("transaction_type", "cashbox_send")
         .ilike("description", `%${currentPhoneDigits}%`)
         .order("executed_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null } as any);
+      : Promise.resolve<TransactionQueryResult>({ data: [], error: null });
 
   const [accountTxResult, incomingCashboxResult] = await Promise.all([
     accountTxPromise,
@@ -528,6 +533,10 @@ function formatTransactionType(type: string | null) {
       return "Credit Card Payment";
     case "credit_purchase":
       return "Credit Card Purchase";
+    case "loan_disbursement":
+      return "Loan Disbursement";
+    case "loan_payment":
+      return "Loan Payment";
     case "fee":
       return "Fee";
     case "interest":

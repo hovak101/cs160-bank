@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Banknote,
   CreditCard,
+  HandCoins,
   Inbox,
   MapPin,
   ScanLine,
@@ -47,6 +48,12 @@ const quickActions = [
     description: "Post purchases and review active card balances.",
     href: "/customer/credit-card",
     icon: CreditCard,
+  },
+  {
+    title: "Loans",
+    description: "Apply for a loan, monitor approval, and repay from checking.",
+    href: "/customer/loans",
+    icon: HandCoins,
   },
   {
     title: "Cheque Deposit",
@@ -191,6 +198,7 @@ export default async function CustomerDashboardPage() {
           .in("account_id", savingsIds)
           .eq("month_key", monthKey)
       : Promise.resolve({ data: [] as SavingsMonthlyActivityRow[] }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("cashboxes")
       .select("cashbox_id, balance")
@@ -596,6 +604,10 @@ function formatTransactionType(type: string | null) {
       return "CashBox Withdraw";
     case "bill_payment":
       return "Bill Payment";
+    case "loan_disbursement":
+      return "Loan Disbursement";
+    case "loan_payment":
+      return "Loan Payment";
     case "fee":
       return "Fee";
     case "interest":

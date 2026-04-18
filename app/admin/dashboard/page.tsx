@@ -60,7 +60,7 @@ export default async function AdminDashboardPage() {
                 Focus
               </p>
               <p className="mt-1 text-sm font-semibold text-white">
-                Accounts, cash flow, and bank income
+                Liquidity, lending, and bank income
               </p>
             </div>
           </div>

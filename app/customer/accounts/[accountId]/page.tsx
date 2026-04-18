@@ -684,6 +684,10 @@ function formatTransactionType(type: string | null) {
       return "Credit Card Payment";
     case "credit_purchase":
       return "Credit Card Purchase";
+    case "loan_disbursement":
+      return "Loan Disbursement";
+    case "loan_payment":
+      return "Loan Payment";
     case "withdrawal":
       return "Withdrawal";
     case "interest":

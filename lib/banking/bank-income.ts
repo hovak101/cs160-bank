@@ -59,6 +59,7 @@ export async function recordBankIncomeTransactions(
     return;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabaseAdmin as any)
     .from("bank_income")
     .upsert(rows, { onConflict: "source_transaction_id" });

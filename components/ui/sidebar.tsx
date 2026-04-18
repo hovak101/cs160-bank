@@ -10,6 +10,7 @@ import {
   Settings,
   Landmark,
   CalendarClock, // Import this
+  HandCoins,
   X
 } from "lucide-react";
 
@@ -21,7 +22,7 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
     { name: "Accounts", icon: Users, href: "/customer/accounts" },
     { name: "Transactions", icon: ArrowRightLeft, href: "/customer/transactions" },
     { name: "Transfers", icon: Send, href: "/customer/transfers" },
-    // NEW LINK
+    { name: "Loans", icon: HandCoins, href: "/customer/loans" },
     { name: "Bill Payments", icon: CalendarClock, href: "/customer/bill-payments" },
     { name: "Settings", icon: Settings, href: "/customer/settings" },
   ];

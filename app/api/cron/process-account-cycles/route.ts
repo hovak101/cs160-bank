@@ -184,6 +184,6 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    message: "Processed savings interest and credit-card account cycles.",
+    message: "Processed savings and credit-card account cycles.",
   });
 }
