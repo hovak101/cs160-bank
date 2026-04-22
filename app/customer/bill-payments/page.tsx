@@ -1,5 +1,6 @@
 import { BillPaymentForm } from "@/components/payments/bill-payment-form";
 import { BillPaymentList } from "@/components/payments/bill-payment-list";
+//added the below for trigger button which is used for demo
 import { TriggerPaymentsButton } from "@/components/payments/trigger-payments-button";
 
 export default function BillPaymentsPage() {
@@ -21,7 +22,7 @@ export default function BillPaymentsPage() {
             </p>
           </div>
 
-          {/* Demo trigger — bottom-right of the header */}
+          {/* Demo trigger, this is only to simulate the auto bill payment backend for demo purposes */}
           <div className="shrink-0">
             <TriggerPaymentsButton />
           </div>
