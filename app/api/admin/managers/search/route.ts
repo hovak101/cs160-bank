@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/require-role";
 
 type ManagerRow = {
   manager_id: string;
@@ -15,87 +16,98 @@ type ManagerRow = {
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
-    const q = (req.nextUrl.searchParams.get("q") || "").trim();
+        const auth = await requireRole(["admin", "manager"]);
+        if (!auth.ok) return auth.response;
+        const { supabase } = auth;
+    try {
+      const supabase = await createClient();
+      const q = (req.nextUrl.searchParams.get("q") || "").trim();
 
-    // First, fetch all managers with their user_ids
-    let query = supabase
-      .from("managers")
-      .select(`
-        manager_id,
-        user_id,
-        first_name,
-        last_name,
-        employee_id,
-        created_at,
-        is_active
-      `)
-      .order("created_at", { ascending: false });
+      // First, fetch all managers with their user_ids
+      let query = supabase
+        .from("managers")
+        .select(`
+          manager_id,
+          user_id,
+          first_name,
+          last_name,
+          employee_id,
+          created_at,
+          is_active
+        `)
+        .order("created_at", { ascending: false });
 
-    const { data: managers, error } = await query;
+      const { data: managers, error } = await query;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // Get all user_ids from managers
-    let userIds = (managers ?? []).map(m => m.user_id);
-    
-    // If search query, fetch users and filter by email/name match
-    let filteredManagers = managers ?? [];
-    if (q && userIds.length > 0) {
-      const { data: users } = await supabase
-        .from("users")
-        .select("user_id, email")
-        .in("user_id", userIds)
-        .or(`email.ilike.%${q}%`);
-      
-      if (users && users.length > 0) {
-        const matchingUserIds = new Set(users.map(u => u.user_id));
-        filteredManagers = (managers ?? []).filter(m => 
-          matchingUserIds.has(m.user_id) ||
-          (m.first_name?.toLowerCase().includes(q.toLowerCase())) ||
-          (m.last_name?.toLowerCase().includes(q.toLowerCase()))
-        );
-      } else {
-        // Only filter by name if no email matches
-        filteredManagers = (managers ?? []).filter(m =>
-          (m.first_name?.toLowerCase().includes(q.toLowerCase())) ||
-          (m.last_name?.toLowerCase().includes(q.toLowerCase()))
-        );
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
       }
-    }
-    
-    // Fetch user emails for filtered managers
-    const filteredUserIds = filteredManagers.map(m => m.user_id);
-    let emails: Record<string, string | null> = {};
-    if (filteredUserIds.length > 0) {
-      const { data: users } = await supabase
-        .from("users")
-        .select("user_id, email")
-        .in("user_id", filteredUserIds);
+
+      // Get all user_ids from managers
+      let userIds = (managers ?? []).map(m => m.user_id);
       
-      if (users) {
-        users.forEach(user => {
-          emails[user.user_id] = user.email;
-        });
+      // If search query, fetch users and filter by email/name match
+      let filteredManagers = managers ?? [];
+      if (q && userIds.length > 0) {
+        const { data: users } = await supabase
+          .from("users")
+          .select("user_id, email")
+          .in("user_id", userIds)
+          .or(`email.ilike.%${q}%`);
+        
+        if (users && users.length > 0) {
+          const matchingUserIds = new Set(users.map(u => u.user_id));
+          filteredManagers = (managers ?? []).filter(m => 
+            matchingUserIds.has(m.user_id) ||
+            (m.first_name?.toLowerCase().includes(q.toLowerCase())) ||
+            (m.last_name?.toLowerCase().includes(q.toLowerCase()))
+          );
+        } else {
+          // Only filter by name if no email matches
+          filteredManagers = (managers ?? []).filter(m =>
+            (m.first_name?.toLowerCase().includes(q.toLowerCase())) ||
+            (m.last_name?.toLowerCase().includes(q.toLowerCase()))
+          );
+        }
       }
-    }
+      
+      // Fetch user emails for filtered managers
+      const filteredUserIds = filteredManagers.map(m => m.user_id);
+      let emails: Record<string, string | null> = {};
+      if (filteredUserIds.length > 0) {
+        const { data: users } = await supabase
+          .from("users")
+          .select("user_id, email")
+          .in("user_id", filteredUserIds);
+        
+        if (users) {
+          users.forEach(user => {
+            emails[user.user_id] = user.email;
+          });
+        }
+      }
 
-    // Combine manager data with email
-    const managersWithEmail = filteredManagers.map(manager => ({
-      ...manager,
-      email: emails[manager.user_id] || null,
-    }));
+      // Combine manager data with email
+      const managersWithEmail = filteredManagers.map(manager => ({
+        ...manager,
+        email: emails[manager.user_id] || null,
+      }));
 
-    return NextResponse.json({
-      data: managersWithEmail as unknown as ManagerRow[],
-    });
+      return NextResponse.json({
+        data: managersWithEmail as unknown as ManagerRow[],
+      });
+    } catch (error) {
+      console.error("Search managers error:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch managers." },
+        { status: 500 }
+      );
+    } 
   } catch (error) {
-    console.error("Search managers error:", error);
+    console.error("Authorization error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch managers." },
-      { status: 500 }
-    );
+      { error: "Unauthorized" },
+      { status: 401 }
+     );
   }
-}
+} 
