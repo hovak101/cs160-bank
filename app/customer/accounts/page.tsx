@@ -49,7 +49,7 @@ export default async function AccountsPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-lg">{acc.account_name}</h3>
-                  <p className="text-xs font-mono text-white">Account #: ••••{acc.account_number.slice(-4)}</p>
+                  <p className="text-xs font-mono text-white">Account #: {acc.account_number}</p>
                 </div>
               </div>
             </div>
