@@ -11,18 +11,30 @@ import {
   CheckCircle2,
   Loader2,
   Globe,
+  ArrowUpRight,
+  Shield,
   Wallet
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+
 
 interface UserData {
   name: string;
   email: string;
+  transaction_alerts?: boolean;
+  device_alerts?: boolean;
+  summary_alerts?: boolean;
 }
 
 export default function SettingsForm({ initialData }: { initialData: UserData }) {
+  const router = useRouter();
+  const supabase = createClient();
   const [activeTab, setActiveTab] = useState("profile");
   const [formData, setFormData] = useState<UserData>(initialData);
+  const [passwords, setPasswords] = useState({ current: "", new: "" });
+  // const [newPassword, setNewPassword] = useState(""); // Track password input
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -35,12 +47,81 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
 
   const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const nameParts = formData.name.trim().split(/\s+/);
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      const { error } = await supabase
+        .from("customers")
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          transaction_alerts: formData.transaction_alerts,
+          device_alerts: formData.device_alerts,
+          summary_alerts: formData.summary_alerts,
+        })
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
       setShowSuccess(true);
+      router.refresh();
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 1000);
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const handleUpdatePassword = async () => {
+    if (passwords.new.length < 6) return alert("New password must be at least 6 characters");
+
+    setIsSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error("User email not found.");
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: passwords.current,
+      });
+
+      if (signInError) {
+        throw new Error("Current password is incorrect.");
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: passwords.new,
+      });
+
+      if (updateError) throw updateError;
+
+      setPasswords({ current: "", new: "" });
+      alert("Password updated successfully!");
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    
+    router.push("/auth/login"); 
+    
+    router.refresh();
+  } catch (error: any) {
+    console.error("Sign out error:", error.message);
+  }
+};
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -77,7 +158,10 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
             </button>
           ))}
           <div className="hidden lg:block my-4 border-t border-white/5" />
-          <button className="hidden lg:flex items-center gap-3 px-4 py-3 text-red-400/70 hover:text-red-400 hover:bg-red-400/5 rounded-xl transition-all">
+          <button
+            onClick={handleSignOut}
+            className="hidden lg:flex items-center gap-3 px-4 py-3 text-red-400/70 hover:text-red-400 hover:bg-red-400/5 rounded-xl transition-all w-full"
+          >
             <LogOut size={18} />
             <span className="font-medium text-sm">Sign Out</span>
           </button>
@@ -129,42 +213,109 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
           )}
 
           {activeTab === "security" && (
-            <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-              <section className="rounded-2xl border border-white/10 bg-[#0f172a] p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <ShieldCheck className="text-cyan-400" />
-                    <h3 className="text-lg font-semibold text-white">Security Keys</h3>
-                  </div>
-                  <span className="text-[10px] bg-emerald-400/10 text-emerald-400 px-2 py-1 rounded-full border border-emerald-400/20">ENCRYPTED</span>
-                </div>
-                <p className="text-sm text-slate-400 mb-6">Two-factor authentication is active. We'll send a code to {formData.email} for new logins.</p>
-                <button className="text-sm text-cyan-400 font-bold hover:underline">Update Security Preferences →</button>
-              </section>
-
-              <section className="rounded-2xl border border-white/10 bg-[#0f172a] p-6">
-                <h4 className="text-white font-medium mb-4">Change Password</h4>
-                <div className="space-y-4">
-                  <input type="password" placeholder="Current Password" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none" />
-                  <input type="password" placeholder="New Password" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none" />
-                  <button className="px-6 py-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-sm font-bold transition-all">Update Password</button>
-                </div>
-              </section>
-            </div>
+            <section className="rounded-2xl border border-white/10 bg-[#0f172a] p-6">
+              <h4 className="text-white font-medium mb-4">Change Password</h4>
+              <div className="space-y-4">
+                <input
+                  type="password"
+                  placeholder="Current Password"
+                  value={passwords.current}
+                  onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none"
+                />
+                <input
+                  type="password"
+                  placeholder="New Password"
+                  value={passwords.new}
+                  onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none"
+                />
+                <button
+                  onClick={handleUpdatePassword}
+                  disabled={isSaving}
+                  className="px-6 py-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-sm font-bold transition-all"
+                >
+                  {isSaving ? "Processing..." : "Update Password"}
+                </button>
+              </div>
+            </section>
           )}
 
           {activeTab === "notifications" && (
             <section className="rounded-2xl border border-white/10 bg-[#0f172a] p-6 space-y-6">
               <h3 className="text-lg font-semibold text-white">Alert Preferences</h3>
-              {["Transaction Alerts", "New Device Login", "Weekly Financial Summary"].map((item) => (
-                <div key={item} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                  <span className="text-sm text-slate-300">{item}</span>
-                  <div className="w-10 h-5 bg-cyan-400 rounded-full relative shadow-[0_0_10px_-2px_#22d3ee]">
-                    <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
-                  </div>
+              {[
+                { id: "transaction_alerts", label: "Transaction Alerts" },
+                { id: "device_alerts", label: "New Device Login" },
+                { id: "summary_alerts", label: "Weekly Financial Summary" },
+              ].map((item) => (
+                <div key={item.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                  <span className="text-sm text-slate-300">{item.label}</span>
+
+                  {/* Functional Toggle Button */}
+                  <button
+                    onClick={() => setFormData({
+                      ...formData,
+                      [item.id]: !formData[item.id as keyof UserData]
+                    })}
+                    className={cn(
+                      "w-10 h-5 rounded-full relative transition-all duration-200",
+                      formData[item.id as keyof UserData]
+                        ? "bg-cyan-400 shadow-[0_0_10px_-2px_#22d3ee]"
+                        : "bg-slate-700"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                      formData[item.id as keyof UserData] ? "right-1" : "left-1"
+                    )} />
+                  </button>
                 </div>
               ))}
             </section>
+          )}
+
+          {activeTab === "billing" && (
+            <div className="space-y-6 animate-in slide-in-from-bottom-2">
+              <section className="rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-[#0f172a] to-[#1e293b] p-6 shadow-xl">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h3 className="text-white font-semibold">Standard Account Tier</h3>
+                    <p className="text-xs text-slate-400 mt-1">Tier 1 Verification Active</p>
+                  </div>
+                  <Shield className="text-cyan-400" size={24} />
+                </div>
+                <div className="space-y-4">
+                  <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500">
+                    <span>Monthly Limit Usage</span>
+                    <span className="text-cyan-400">24%</span>
+                  </div>
+                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div className="w-[24%] h-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-white/10 bg-[#0f172a] p-6">
+                <h4 className="text-sm font-bold text-slate-500 uppercase mb-4">Transaction Limits</h4>
+                <div className="space-y-4">
+                  {[
+                    { label: "Daily Transfer Limit", limit: "$5,000.00", used: "$1,200.00" },
+                    { label: "ATM Withdrawal", limit: "$1,000.00", used: "$0.00" }
+                  ].map((limit, i) => (
+                    <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5">
+                      <div>
+                        <p className="text-white text-sm font-medium">{limit.label}</p>
+                        <p className="text-[10px] text-slate-500 mt-1">{limit.used} of {limit.limit} used</p>
+                      </div>
+                      <button className="flex items-center gap-1 text-[10px] font-bold text-cyan-400 hover:underline">
+                        INCREASE <ArrowUpRight size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
           )}
 
           {/* Persistent Save Button for relevant tabs */}

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"; 
+import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import SettingsForm from "./SettingsForm";
 
@@ -12,13 +12,17 @@ export default async function SettingsPage() {
   }
 
   const { data: profile } = await supabase
-    .from("profiles") 
-    .select("full_name")
-    .eq("id", user.id)
+    .from("customers")
+    .select("first_name, last_name")
+    .eq("user_id", user.id)
     .single();
 
+  const dbFullName = profile
+    ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim()
+    : null;
+
   const initialData = {
-    name: profile?.full_name || user.user_metadata?.full_name || "",
+    name: dbFullName || user.user_metadata?.full_name || "",
     email: user.email || "",
   };
 
