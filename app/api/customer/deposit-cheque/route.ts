@@ -68,7 +68,7 @@ export async function POST(req: Request) {
 
     const { data: account, error: accountError } = await supabase
       .from("accounts")
-      .select("account_id, customer_id, balance, currency, status")
+      .select("account_id, customer_id, account_type, balance, currency, status")
       .eq("account_id", accountId)
       .eq("customer_id", customer.customer_id)
       .single();
@@ -83,6 +83,16 @@ export async function POST(req: Request) {
     if (account.status !== "active") {
       return NextResponse.json(
         { error: "Account is not active." },
+        { status: 400 }
+      );
+    }
+
+    if (account.account_type == "credit") {
+      return NextResponse.json(
+        {
+          error:
+            "Cheque deposits are only supported for checking and savings accounts. Pay credit cards through transfers instead.",
+        },
         { status: 400 }
       );
     }
@@ -106,7 +116,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: transactionError } = await supabase
+    // Insert transaction first to get the transaction_id
+    const { data: transactionData, error: transactionError } = await supabase
       .from("transactions")
       .insert({
         reference_number: `CHK-${Date.now()}`,
@@ -117,16 +128,62 @@ export async function POST(req: Request) {
         status: "completed",
         description: "Cheque deposit (demo)",
         executed_at: new Date().toISOString(),
-      });
+      })
+      .select("transaction_id")
+      .single();
 
-    if (transactionError) {
+    if (transactionError || !transactionData) {
       console.error("transactionError:", transactionError);
       return NextResponse.json(
         {
           error:
-            transactionError.message ||
+            transactionError?.message ||
             "Balance updated but transaction failed.",
         },
+        { status: 500 }
+      );
+    }
+
+    // Upload cheque image to Supabase Storage
+    const fileExtension = chequeImage.name.split(".").pop() || "jpg";
+    const fileName = `cheques/${customer.customer_id}/${transactionData.transaction_id}.${fileExtension}`;
+
+    try {
+      const buffer = await chequeImage.arrayBuffer();
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from("cheques")
+        .upload(fileName, new Uint8Array(buffer), {
+          contentType: chequeImage.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("uploadError:", uploadError);
+        return NextResponse.json(
+          { error: "Failed to upload cheque image." },
+          { status: 500 }
+        );
+      }
+
+      // Store image reference in cheque_deposits table
+      const { error: chequeDepositError } = await supabase
+        .from("cheque_deposits")
+        .insert({
+          transaction_id: transactionData.transaction_id,
+          image_url: fileName,
+        });
+
+      if (chequeDepositError) {
+        console.error("chequeDepositError:", chequeDepositError);
+        return NextResponse.json(
+          { error: "Transaction created but failed to store image reference." },
+          { status: 500 }
+        );
+      }
+    } catch (uploadErr) {
+      console.error("Image upload error:", uploadErr);
+      return NextResponse.json(
+        { error: "Failed to process cheque image." },
         { status: 500 }
       );
     }
