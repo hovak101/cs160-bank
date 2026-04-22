@@ -33,6 +33,7 @@ export default function BillPaymentsPage() {
         <div className="xl:col-span-4">
           <BillPaymentForm />
         </div>
+
         <div className="xl:col-span-8">
           <BillPaymentList />
         </div>
