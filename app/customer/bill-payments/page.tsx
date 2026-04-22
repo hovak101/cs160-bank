@@ -6,6 +6,7 @@ import { TriggerPaymentsButton } from "@/components/payments/trigger-payments-bu
 export default function BillPaymentsPage() {
   return (
     <div className="space-y-8">
+      {/* Header */}
       <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
         <div className="pointer-events-none absolute left-1/2 top-0 h-full w-full -translate-x-1/2 bg-[radial-gradient(circle_at_50%_-20%,#22d3ee33,transparent_70%)]" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
