@@ -19,7 +19,7 @@ export function BillPaymentForm() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export function BillPaymentForm() {
             .from("accounts")
             .select("account_id, account_name, account_number")
             .eq("customer_id", customer.customer_id);
-          
+
           setAccounts(accountsData || []);
         }
       } catch (error) {
@@ -54,7 +54,7 @@ export function BillPaymentForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const payload = Object.fromEntries(formData.entries());
 
@@ -69,18 +69,21 @@ export function BillPaymentForm() {
       });
 
       const result = await res.json();
+      console.log("API response:", res.status, result);
       if (!res.ok) throw new Error(result.error || "Failed to create schedule");
 
-      toast.success("Schedule created successfully!");
-      window.location.reload(); 
+      toast.success("Bill payment scheduled!");
+      window.location.reload();
     } catch (err: any) {
+      console.error("Submit error:", err);
       toast.error(err.message || "An error occurred");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const selectClass = "flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white ring-offset-background focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 appearance-none cursor-pointer";
+  const selectClass =
+    "flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white ring-offset-background focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 appearance-none cursor-pointer";
 
   return (
     <Card className="bg-white/5 border-white/10 text-white shadow-[0_0_40px_-8px_rgba(34,211,238,0.15)]">
@@ -91,10 +94,10 @@ export function BillPaymentForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* Source Account - Dynamic Dropdown */}
+
+          {/* Source Account */}
           <div className="space-y-2">
-            <Label>Source Account</Label>
+            <Label>Pay From</Label>
             {loadingAccounts ? (
               <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
                 <Loader2 className="animate-spin" size={14} /> SYNCING VAULT...
@@ -102,7 +105,7 @@ export function BillPaymentForm() {
             ) : (
               <select name="account_id" className={selectClass} required>
                 <option value="" className="bg-[#0f172a]">Select Source Account</option>
-                {accounts.map(acc => (
+                {accounts.map((acc) => (
                   <option key={acc.account_id} value={acc.account_id} className="bg-[#0f172a]">
                     {acc.account_name} (****{acc.account_number.slice(-4)})
                   </option>
@@ -111,32 +114,50 @@ export function BillPaymentForm() {
             )}
           </div>
 
-          {/* Payee Account - Text Input (For External IDs) */}
+          {/* Payee by account number, backend resolves to account UUID */}
           <div className="space-y-2">
-            <Label htmlFor="payee_account_id">Payee Account ID</Label>
-            <Input 
-              id="payee_account_id"
-              name="payee_account_id" 
-              placeholder="Enter Recipient UUID" 
-              className="bg-white/5 border-white/10 focus:border-cyan-400" 
-              required 
+            <Label htmlFor="payee_account_number">Pay To (Account Number)</Label>
+            <Input
+              id="payee_account_number"
+              name="payee_account_number"
+              placeholder="Enter recipient's account number"
+              className="bg-white/5 border-white/10 focus:border-cyan-400"
+              required
+            />
+            <p className="text-[11px] text-slate-500">
+              The recipient must have an account at this bank.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Nickname</Label>
+            <Input
+              name="nickname"
+              placeholder="e.g. Rent, Electric Bill"
+              className="bg-white/5 border-white/10 focus:border-cyan-400"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Amount ($)</Label>
-              <Input name="amount" type="number" step="0.01" placeholder="0.00" className="bg-white/5 border-white/10 focus:border-cyan-400" required />
+              <Input
+                name="amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                className="bg-white/5 border-white/10 focus:border-cyan-400"
+                required
+              />
             </div>
 
             <div className="space-y-2">
               <Label>Frequency</Label>
               <select name="frequency" className={selectClass} defaultValue="monthly">
-                <option value="once" className="bg-[#0f172a]">Once</option>
-                <option value="weekly" className="bg-[#0f172a]">Weekly</option>
-                <option value="biweekly" className="bg-[#0f172a]">Bi-Weekly</option>
-                <option value="monthly" className="bg-[#0f172a]">Monthly</option>
-                <option value="annually" className="bg-[#0f172a]">Annually</option>
+                <option value="weekly"    className="bg-[#0f172a]">Weekly</option>
+                <option value="bi-weekly" className="bg-[#0f172a]">Bi-Weekly</option>
+                <option value="monthly"   className="bg-[#0f172a]">Monthly</option>
+                <option value="annually"  className="bg-[#0f172a]">Annually</option>
               </select>
             </div>
           </div>
@@ -144,22 +165,26 @@ export function BillPaymentForm() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Start Date</Label>
-              <Input name="start_date" type="date" className="bg-white/5 border-white/10 text-xs focus:border-cyan-400" required />
+              <Input
+                name="start_date"
+                type="date"
+                className="bg-white/5 border-white/10 text-xs focus:border-cyan-400"
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label>End Date</Label>
-              <Input name="end_date" type="date" className="bg-white/5 border-white/10 text-xs focus:border-cyan-400" />
+              <Input
+                name="end_date"
+                type="date"
+                className="bg-white/5 border-white/10 text-xs focus:border-cyan-400"
+              />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Nickname</Label>
-            <Input name="nickname" placeholder="e.g. Electricity Bill" className="bg-white/5 border-white/10 focus:border-cyan-400" />
-          </div>
-
-          <Button 
-            type="submit" 
-            className="w-full bg-cyan-500 hover:bg-cyan-600 text-[#0f172a] font-bold uppercase tracking-wider transition-all" 
+          <Button
+            type="submit"
+            className="w-full bg-cyan-500 hover:bg-cyan-600 text-[#0f172a] font-bold uppercase tracking-wider transition-all"
             disabled={submitting || loadingAccounts}
           >
             {submitting ? "Processing..." : "Confirm Schedule"}

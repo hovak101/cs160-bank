@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 // get all bill payment schedules for the logged in user
 export async function GET() {
   const supabase = await createClient();
 
-  let { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
   const { data: userData } = await supabase
     .from("users")
@@ -20,9 +18,8 @@ export async function GET() {
   if (userData?.role !== "customer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  
-  // get the customer id from the customers table
-  let { data: customerData } = await supabase
+
+  const { data: customerData } = await supabase
     .from("customers")
     .select("customer_id")
     .eq("user_id", user.id)
@@ -32,8 +29,7 @@ export async function GET() {
     return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   }
 
-  // get all accounts for this customer so we can find their schedules
-  let { data: customerAccounts } = await supabase
+  const { data: customerAccounts } = await supabase
     .from("accounts")
     .select("account_id")
     .eq("customer_id", customerData.customer_id);
@@ -42,10 +38,9 @@ export async function GET() {
     return NextResponse.json({ schedules: [] });
   }
 
-  let accountIdList = customerAccounts.map((a) => a.account_id);
+  const accountIdList = customerAccounts.map((a) => a.account_id);
 
-  // now get all the schedules that belong to those accounts
-  let { data: scheduleList } = await supabase
+  const { data: scheduleList } = await supabaseAdmin
     .from("bill_schedules" as any)
     .select("*")
     .in("account_id", accountIdList)
@@ -59,17 +54,13 @@ export async function GET() {
 export async function POST(request: Request) {
   const supabase = await createClient();
 
-  let { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
-  if (!user) {
-    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  }
+  const body = await request.json();
+  const { account_id, payee_account_number, nickname, amount, frequency, start_date, end_date } = body;
 
-  let body = await request.json();
-  let { account_id, payee_account_id, nickname, amount, frequency, start_date, end_date } = body;
-
-  // make sure all required fields are filled in
-  if (!account_id || !payee_account_id || !amount || !frequency || !start_date) {
+  if (!account_id || !payee_account_number || !amount || !frequency || !start_date) {
     return NextResponse.json({ error: "Fill in all required fields." }, { status: 400 });
   }
 
@@ -81,19 +72,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "End date must be after start date." }, { status: 400 });
   }
 
-  const validFrequencies = ["weekly", "biweekly", "monthly", "annually", "once"];
+  const validFrequencies = ["weekly", "bi-weekly", "monthly", "annually"];
   if (!validFrequencies.includes(frequency)) {
     return NextResponse.json({ error: "Invalid frequency." }, { status: 400 });
   }
 
-  // check that the user actually owns the source account
-  let { data: customerData } = await supabase
+  // Verify the logged-in user owns the source account
+  const { data: customerData } = await supabase
     .from("customers")
     .select("customer_id")
     .eq("user_id", user.id)
     .single();
 
-  let { data: sourceAccount } = await supabase
+  const { data: sourceAccount } = await supabase
     .from("accounts")
     .select("account_id, status")
     .eq("account_id", account_id)
@@ -103,18 +94,38 @@ export async function POST(request: Request) {
   if (!sourceAccount) {
     return NextResponse.json({ error: "You don't own that account." }, { status: 403 });
   }
-
   if (sourceAccount.status !== "active") {
     return NextResponse.json({ error: "That account is not active." }, { status: 400 });
   }
 
-  // save the new schedule to the database
-  let { data: newSchedule, error: insertError } = await supabase
+  // Look up the payee by account number, they must be a customer of this bank
+  const { data: payeeAccount } = await supabaseAdmin
+    .from("accounts")
+    .select("account_id, status, account_name")
+    .eq("account_number", payee_account_number)
+    .single();
+
+  if (!payeeAccount) {
+    return NextResponse.json(
+      { error: "No account found with that account number. The recipient must have an account at this bank." },
+      { status: 404 }
+    );
+  }
+  if (payeeAccount.status !== "active") {
+    return NextResponse.json({ error: "That payee account is not active." }, { status: 400 });
+  }
+
+  // Can't pay yourself!
+  if (payeeAccount.account_id === account_id) {
+    return NextResponse.json({ error: "You can't schedule a bill payment to your own account." }, { status: 400 });
+  }
+
+  const { data: newSchedule, error: insertError } = await supabaseAdmin
     .from("bill_schedules" as any)
     .insert({
       account_id: account_id,
-      payee_id: payee_account_id,
-      nickname: nickname || "Bill Payment",
+      payee_id: payeeAccount.account_id,   // store the resolved UUID
+      nickname: nickname || `Bill Payment → ${payeeAccount.account_name}`,
       amount: amount,
       currency: "USD",
       frequency: frequency,
