@@ -130,48 +130,7 @@ export default async function AccountsPage() {
 
         </div>
       </section>
-
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {accounts?.map((acc) => (
-          <Card key={acc.account_id} className="p-6 overflow-hidden border-slate-200 hover:border-teal-200 transition-all group">
-            <div className="flex justify-between items-start mb-8">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-teal-50 rounded-2xl text-teal-600">
-                  <Landmark size={24} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-lg">{acc.account_name}</h3>
-                  <p className="text-xs font-mono text-white">Account #: {acc.account_number}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Current Balance</p>
-              <p className="text-4xl font-bold text-white">
-                ${acc.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between text-[11px] font-medium uppercase tracking-widest">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400">Status</span>
-                <span className="flex items-center gap-1 text-teal-600 font-bold">
-                  {acc.status}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-400">
-                Opened {new Date(acc.created_at).toLocaleDateString()}
-              </div>
-              <CloseAccountButton
-                accountId={acc.account_id}
-                status={acc.status}
-              />
-            </div>
-          </Card>
-        ))}
-      </div>
+      
 
       {!accounts || accounts.length === 0 ? (
         <Card className="border-white/10 bg-[#0f172a] p-8 text-center text-slate-300">
