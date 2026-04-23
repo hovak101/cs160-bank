@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -225,6 +225,35 @@ export type Database = {
           },
         ]
       }
+      cheque_deposits: {
+        Row: {
+          cheque_deposit_id: string
+          created_at: string
+          image_url: string
+          transaction_id: string
+        }
+        Insert: {
+          cheque_deposit_id?: string
+          created_at?: string
+          image_url: string
+          transaction_id: string
+        }
+        Update: {
+          cheque_deposit_id?: string
+          created_at?: string
+          image_url?: string
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cheque_deposits_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["transaction_id"]
+          },
+        ]
+      }
       credit_accounts: {
         Row: {
           account_id: string
@@ -312,9 +341,6 @@ export type Database = {
           exp_year: number
           rewards_program: string
           rewards_rate: number
-          security_code_hash: string
-          security_code_last_updated_at: string
-          security_code_mode: string
           updated_at: string
         }
         Insert: {
@@ -329,9 +355,6 @@ export type Database = {
           exp_year: number
           rewards_program?: string
           rewards_rate?: number
-          security_code_hash: string
-          security_code_last_updated_at?: string
-          security_code_mode?: string
           updated_at?: string
         }
         Update: {
@@ -346,9 +369,6 @@ export type Database = {
           exp_year?: number
           rewards_program?: string
           rewards_rate?: number
-          security_code_hash?: string
-          security_code_last_updated_at?: string
-          security_code_mode?: string
           updated_at?: string
         }
         Relationships: [
@@ -417,6 +437,126 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          accrued_interest: number
+          admin_decision_notes: string | null
+          annual_interest_rate: number
+          checking_account_id: string
+          created_at: string
+          customer_id: string
+          debt_to_income_ratio: number
+          disbursed_at: string | null
+          employment_status: string
+          estimated_monthly_payment: number
+          existing_credit_debt: number
+          last_interest_accrued_at: string | null
+          last_payment_at: string | null
+          loan_id: string
+          monthly_housing_payment: number
+          monthly_income: number
+          other_financial_notes: string | null
+          outstanding_principal: number
+          paid_off_at: string | null
+          principal_amount: number
+          purpose: string | null
+          recommended_decision: string
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          risk_score: number
+          risk_summary: string | null
+          risk_tier: string
+          status: string
+          term_months: number
+          total_interest_charged: number
+          total_paid: number
+          updated_at: string
+        }
+        Insert: {
+          accrued_interest?: number
+          admin_decision_notes?: string | null
+          annual_interest_rate: number
+          checking_account_id: string
+          created_at?: string
+          customer_id: string
+          debt_to_income_ratio?: number
+          disbursed_at?: string | null
+          employment_status: string
+          estimated_monthly_payment?: number
+          existing_credit_debt?: number
+          last_interest_accrued_at?: string | null
+          last_payment_at?: string | null
+          loan_id?: string
+          monthly_housing_payment?: number
+          monthly_income: number
+          other_financial_notes?: string | null
+          outstanding_principal?: number
+          paid_off_at?: string | null
+          principal_amount: number
+          purpose?: string | null
+          recommended_decision?: string
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          risk_score?: number
+          risk_summary?: string | null
+          risk_tier?: string
+          status?: string
+          term_months: number
+          total_interest_charged?: number
+          total_paid?: number
+          updated_at?: string
+        }
+        Update: {
+          accrued_interest?: number
+          admin_decision_notes?: string | null
+          annual_interest_rate?: number
+          checking_account_id?: string
+          created_at?: string
+          customer_id?: string
+          debt_to_income_ratio?: number
+          disbursed_at?: string | null
+          employment_status?: string
+          estimated_monthly_payment?: number
+          existing_credit_debt?: number
+          last_interest_accrued_at?: string | null
+          last_payment_at?: string | null
+          loan_id?: string
+          monthly_housing_payment?: number
+          monthly_income?: number
+          other_financial_notes?: string | null
+          outstanding_principal?: number
+          paid_off_at?: string | null
+          principal_amount?: number
+          purpose?: string | null
+          recommended_decision?: string
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          risk_score?: number
+          risk_summary?: string | null
+          risk_tier?: string
+          status?: string
+          term_months?: number
+          total_interest_charged?: number
+          total_paid?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loans_checking_account_id_fkey"
+            columns: ["checking_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "loans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["customer_id"]
           },
         ]
       }

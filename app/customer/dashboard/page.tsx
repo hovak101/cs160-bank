@@ -69,7 +69,7 @@ const quickActions = [
   },
   {
     title: "Bill Pay",
-    description: "Create automated bill payment schedules.",
+    description: "Manage and schedule payments from checking accounts.",
     href: "/customer/bill-payments",
     icon: CreditCard,
   },
@@ -624,4 +624,137 @@ function formatTransactionType(type: string | null) {
             .join(" ")
         : "Transaction";
   }
+}
+
+function formatPhone(phone: string | null) {
+  if (!phone) return "N/A";
+
+  const digits = normalizePhone(phone);
+
+  if (digits.length !== 10) return phone;
+
+  return `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function parseCashboxDescription(description: string | null) {
+  const text = description ?? "";
+
+  let match = text.match(
+    /(?:sent|cashbox)\s+from\s+(\d{10})\s+to\s+(\d{10})/i
+  );
+  if (match) {
+    return {
+      senderPhone: match[1],
+      receiverPhone: match[2],
+    };
+  }
+
+  match = text.match(/sent\s+to\s+cashbox\s*\(?(\d{10})\)?/i);
+  if (match) {
+    return {
+      senderPhone: null,
+      receiverPhone: match[1],
+    };
+  }
+
+  const phones = text.match(/\b\d{10}\b/g) ?? [];
+  return {
+    senderPhone: phones[0] ?? null,
+    receiverPhone: phones[1] ?? phones[0] ?? null,
+  };
+}
+
+function getAccountLabel(
+  accountId: string | null,
+  accountMap: Map<string, Account>
+) {
+  if (!accountId) return null;
+  const account = accountMap.get(accountId);
+  if (!account) return null;
+  return `${account.account_name} • ****${account.account_number?.slice(-4)}`;
+}
+
+function getTransactionMeta(
+  tx: Transaction,
+  accountMap: Map<string, Account>,
+  currentPhoneDigits: string
+) {
+  const sourceOwned = !!(
+    tx.source_account_id && accountMap.has(tx.source_account_id)
+  );
+  const destinationOwned = !!(
+    tx.destination_account_id && accountMap.has(tx.destination_account_id)
+  );
+
+  const sourceLabel = getAccountLabel(tx.source_account_id, accountMap);
+  const destinationLabel = getAccountLabel(tx.destination_account_id, accountMap);
+  const normalizedType = (tx.transaction_type || "").toLowerCase();
+  const parsed = parseCashboxDescription(tx.description);
+
+  if (normalizedType === "cashbox_send") {
+    const isIncomingCashbox =
+      !!currentPhoneDigits &&
+      normalizePhone(parsed.receiverPhone) === currentPhoneDigits &&
+      !sourceOwned;
+
+    if (isIncomingCashbox) {
+      return {
+        direction: "incoming" as const,
+        title: "Received in CashBox",
+        subtitle: `Received from ${formatPhone(parsed.senderPhone)}`,
+      };
+    }
+
+    return {
+      direction: "outgoing" as const,
+      title: "Sent to CashBox",
+      subtitle: `Sent to ${formatPhone(parsed.receiverPhone)}`,
+    };
+  }
+
+  if (normalizedType === "cashbox_withdraw") {
+    return {
+      direction: "incoming" as const,
+      title: "Withdraw from CashBox",
+      subtitle: `Moved from CashBox to ${destinationLabel || "your account"}`,
+    };
+  }
+
+  if (normalizedType === "deposit") {
+    return {
+      direction: "incoming" as const,
+      title: "Deposit",
+      subtitle: tx.description || "Deposit completed",
+    };
+  }
+
+  if (normalizedType === "withdraw" || normalizedType === "withdrawal") {
+    return {
+      direction: "outgoing" as const,
+      title: "Withdrawal",
+      subtitle: tx.description || "Withdrawal completed",
+    };
+  }
+
+  if (sourceOwned && destinationOwned) {
+    return {
+      direction: "internal" as const,
+      title: "Internal Transfer",
+      subtitle: tx.description || "Transfer between your accounts",
+    };
+  }
+
+  if (destinationOwned) {
+    return {
+      direction: "incoming" as const,
+      title: "Incoming Transfer",
+      subtitle: tx.description || "Money received",
+    };
+  }
+
+  return {
+    direction: "outgoing" as const,
+    title: "Outgoing Transfer",
+    subtitle: tx.description || "Money sent",
+  };
 }

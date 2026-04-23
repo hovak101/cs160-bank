@@ -26,12 +26,12 @@ export function BillPaymentList() {
 
   async function handleDelete(id: string) {
     if (!confirm("Are you sure you want to cancel this payment schedule?")) return;
-    
+
     try {
-      // Hits the /api/bill-payments/[scheduleId] route
       const res = await fetch(`/api/bill-payments/${id}`, { method: "DELETE" });
       if (res.ok) {
-        setSchedules(prev => prev.filter(s => s.id !== id));
+        // I added this fix of filtering by s.schedule_id instead of s.id 
+        setSchedules(prev => prev.filter(s => s.schedule_id !== id));
         toast.success("Schedule cancelled");
       } else {
         throw new Error("Failed to delete");
@@ -61,32 +61,38 @@ export function BillPaymentList() {
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-4 text-left">Label / Payee</th>
+                <th className="px-6 py-4 text-left">Label</th>
                 <th className="px-6 py-4 text-left">Frequency</th>
+                <th className="px-6 py-4 text-left">Next Payment</th>
                 <th className="px-6 py-4 text-right">Amount</th>
                 <th className="px-6 py-4 text-center">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {schedules.map((s) => (
-                <tr key={s.id} className="hover:bg-white/[0.02] transition-colors group">
+                <tr key={s.schedule_id} className="hover:bg-white/[0.02] transition-colors group">
                   <td className="px-6 py-4">
                     <p className="font-semibold text-slate-100">{s.nickname}</p>
-                    <p className="text-[10px] font-mono text-slate-500 uppercase">To: {s.payee_id}</p>
+                    <p className="text-[10px] font-mono text-slate-500 uppercase">
+                      To account: {s.payee_id}
+                    </p>
                   </td>
                   <td className="px-6 py-4">
                     <span className="px-2 py-1 rounded-full bg-cyan-400/10 text-cyan-400 text-[10px] font-bold uppercase">
                       {s.frequency}
                     </span>
                   </td>
+                  <td className="px-6 py-4 text-slate-400 text-xs font-mono">
+                    {s.next_payment_date ?? "—"}
+                  </td>
                   <td className="px-6 py-4 text-right font-mono text-cyan-400 tabular-nums font-bold">
                     ${parseFloat(s.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleDelete(s.id)} 
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(s.schedule_id)}
                       className="text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all"
                     >
                       <Trash2 size={16} />
@@ -96,8 +102,8 @@ export function BillPaymentList() {
               ))}
               {schedules.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-20 text-center">
-                    <p className="text-slate-500 italic">No automated payments detected in your profile.</p>
+                  <td colSpan={5} className="py-20 text-center">
+                    <p className="text-slate-500 italic">No automated payments scheduled.</p>
                   </td>
                 </tr>
               )}

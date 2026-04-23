@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server"; 
+import { requireRole } from "@/lib/auth/require-role";
 
 type TransactionType =
   | "deposit"
@@ -54,26 +55,9 @@ type TransactionResponse = {
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // Verify manager role
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: userData } = await supabase
-      .from("users")
-      .select("role")
-      .eq("user_id", user.id)
-      .single();
-
-    if (userData?.role !== "manager") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireRole(["admin", "manager"]);
+    if (!auth.ok) return auth.response;
+    const { supabase } = auth;
 
     const searchParams = req.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));

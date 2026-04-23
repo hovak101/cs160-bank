@@ -106,6 +106,23 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
+  {
+    label: "Reports",
+    href: "/manager/reports",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-5 w-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <path d="M3 3v18h18" />
+        <path d="M7 16l4-8 4 4 5-6" />
+      </svg>
+    ),
+  },
 ];
 
 export function ManagerShell({ children }: { children: React.ReactNode }) {

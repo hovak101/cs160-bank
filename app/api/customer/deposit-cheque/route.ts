@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +87,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!isDepositEligible(account.account_type)) {
+    if (account.account_type == "credit") {
       return NextResponse.json(
         {
           error:
@@ -117,7 +116,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error: transactionError } = await supabase
+    // Insert transaction first to get the transaction_id
+    const { data: transactionData, error: transactionError } = await supabase
       .from("transactions")
       .insert({
         reference_number: `CHK-${Date.now()}`,
@@ -128,16 +128,62 @@ export async function POST(req: Request) {
         status: "completed",
         description: "Cheque deposit (demo)",
         executed_at: new Date().toISOString(),
-      });
+      })
+      .select("transaction_id")
+      .single();
 
-    if (transactionError) {
+    if (transactionError || !transactionData) {
       console.error("transactionError:", transactionError);
       return NextResponse.json(
         {
           error:
-            transactionError.message ||
+            transactionError?.message ||
             "Balance updated but transaction failed.",
         },
+        { status: 500 }
+      );
+    }
+
+    // Upload cheque image to Supabase Storage
+    const fileExtension = chequeImage.name.split(".").pop() || "jpg";
+    const fileName = `cheques/${customer.customer_id}/${transactionData.transaction_id}.${fileExtension}`;
+
+    try {
+      const buffer = await chequeImage.arrayBuffer();
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from("cheques")
+        .upload(fileName, new Uint8Array(buffer), {
+          contentType: chequeImage.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("uploadError:", uploadError);
+        return NextResponse.json(
+          { error: "Failed to upload cheque image." },
+          { status: 500 }
+        );
+      }
+
+      // Store image reference in cheque_deposits table
+      const { error: chequeDepositError } = await supabase
+        .from("cheque_deposits")
+        .insert({
+          transaction_id: transactionData.transaction_id,
+          image_url: fileName,
+        });
+
+      if (chequeDepositError) {
+        console.error("chequeDepositError:", chequeDepositError);
+        return NextResponse.json(
+          { error: "Transaction created but failed to store image reference." },
+          { status: 500 }
+        );
+      }
+    } catch (uploadErr) {
+      console.error("Image upload error:", uploadErr);
+      return NextResponse.json(
+        { error: "Failed to process cheque image." },
         { status: 500 }
       );
     }

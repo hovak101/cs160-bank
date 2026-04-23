@@ -64,18 +64,18 @@ export default async function CustomerTransactionsPage() {
   const accountOrQuery =
     accountIds.length > 0
       ? accountIds
-          .map(
-            (id) =>
-              `source_account_id.eq.${id},destination_account_id.eq.${id}`
-          )
-          .join(",")
+        .map(
+          (id) =>
+            `source_account_id.eq.${id},destination_account_id.eq.${id}`
+        )
+        .join(",")
       : "";
 
   const accountTxPromise =
     accountOrQuery.length > 0
       ? supabase
-          .from("transactions")
-          .select(`
+        .from("transactions")
+        .select(`
             transaction_id,
             reference_number,
             source_account_id,
@@ -92,8 +92,8 @@ export default async function CustomerTransactionsPage() {
 
   const incomingCashboxPromise = currentPhoneDigits
     ? supabase
-        .from("transactions")
-        .select(`
+      .from("transactions")
+      .select(`
           transaction_id,
           reference_number,
           source_account_id,
@@ -205,8 +205,8 @@ export default async function CustomerTransactionsPage() {
                 meta.direction === "incoming"
                   ? "+"
                   : meta.direction === "outgoing"
-                  ? "-"
-                  : "";
+                    ? "-"
+                    : "";
 
               return (
                 <div
