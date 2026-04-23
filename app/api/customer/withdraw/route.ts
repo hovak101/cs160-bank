@@ -13,6 +13,11 @@ import {
   getRemainingSavingsWithdrawalAllowance,
 } from "@/lib/banking/server";
 import { recordBankIncomeTransactions } from "@/lib/banking/bank-income";
+import { verifySecurityCode } from "@/lib/banking/security-code.server";
+import {
+  isValidSecurityCodeFormat,
+  normalizeSecurityCode,
+} from "@/lib/banking/security-code";
 
 export const dynamic = "force-dynamic";
 
@@ -34,14 +39,15 @@ export async function POST(req: Request) {
       .select("role")
       .eq("user_id", user.id)
       .single();
-  
+
     if (userData?.role !== "customer") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    
+
     const formData = await req.formData();
     const accountId = String(formData.get("account_id") || "");
     const amountValue = Number(formData.get("amount"));
+    const securityCode = normalizeSecurityCode(formData.get("security_code"));
 
     if (!accountId) {
       return NextResponse.json(
@@ -95,18 +101,54 @@ export async function POST(req: Request) {
     const currentBalance = Number(account.balance || 0);
 
     if (isCreditAccount(account.account_type)) {
-      const { data: creditAccount, error: creditAccountError } = await supabase
-        .from("credit_accounts")
-        .select(
-          "account_id, available_credit, current_balance, cash_advance_limit, cash_advance_balance"
-        )
-        .eq("account_id", account.account_id)
-        .single();
+      if (!isValidSecurityCodeFormat(securityCode)) {
+        return NextResponse.json(
+          { error: "A valid 3-digit security code is required for cash advances." },
+          { status: 400 }
+        );
+      }
+
+      const [{ data: creditAccount, error: creditAccountError }, { data: creditCard }] =
+        await Promise.all([
+          supabase
+            .from("credit_accounts")
+            .select(
+              "account_id, available_credit, current_balance, cash_advance_limit, cash_advance_balance"
+            )
+            .eq("account_id", account.account_id)
+            .single(),
+          supabase
+            .from("credit_cards")
+            .select("card_status, security_code_hash")
+            .eq("account_id", account.account_id)
+            .maybeSingle(),
+        ]);
 
       if (creditAccountError || !creditAccount) {
         return NextResponse.json(
           { error: "Credit card details not found." },
           { status: 404 }
+        );
+      }
+
+      if (!creditCard) {
+        return NextResponse.json(
+          { error: "Credit card record not found." },
+          { status: 404 }
+        );
+      }
+
+      if ((creditCard.card_status ?? "").toLowerCase() !== "active") {
+        return NextResponse.json(
+          { error: "Only active credit cards can be used for cash advances." },
+          { status: 400 }
+        );
+      }
+
+      if (!verifySecurityCode(securityCode, creditCard.security_code_hash)) {
+        return NextResponse.json(
+          { error: "Security code does not match this card." },
+          { status: 400 }
         );
       }
 
@@ -279,21 +321,19 @@ export async function POST(req: Request) {
         }
       }
 
-      const { error: transactionError } = await supabase
-        .from("transactions")
-        .insert({
-          reference_number: `WTH-${Date.now()}`,
-          source_account_id: account.account_id,
-          destination_account_id: null,
-          amount: amountValue,
-          transaction_type: "withdrawal",
-          status: "completed",
-          description:
-            account.account_type === "saving"
-              ? "Savings withdrawal"
-              : "Cash withdrawal",
-          executed_at: nowIso,
-        });
+      const { error: transactionError } = await supabase.from("transactions").insert({
+        reference_number: `WTH-${Date.now()}`,
+        source_account_id: account.account_id,
+        destination_account_id: null,
+        amount: amountValue,
+        transaction_type: "withdrawal",
+        status: "completed",
+        description:
+          account.account_type === "saving"
+            ? "Savings withdrawal"
+            : "Cash withdrawal",
+        executed_at: nowIso,
+      });
 
       if (transactionError) {
         console.error("transactionError:", transactionError);

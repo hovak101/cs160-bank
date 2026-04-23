@@ -1,20 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  CheckCircle2,
+  Activity,
+  ArrowRightLeft,
   ChevronRight,
-  DollarSign,
+  CircleDollarSign,
   HandCoins,
   Landmark,
-  LineChart,
   PiggyBank,
-  TrendingUp,
   Wallet,
 } from "lucide-react";
 
 type TxRow = {
   amount: number | null;
   transaction_type: string | null;
-  status: string | null;
   executed_at: string | null;
 };
 
@@ -35,10 +33,8 @@ type BankIncomeRow = {
 
 type CreditExposureRow = {
   account_id: string;
-  credit_accounts:
-    | { current_balance: number | null }
-    | { current_balance: number | null }[]
-    | null;
+  current_balance: number | null;
+  credit_limit: number | null;
 };
 
 type LoanRow = {
@@ -72,19 +68,19 @@ export async function AdminDashboardStats() {
     supabase.from("accounts").select("account_id, balance, account_type, status"),
     supabase
       .from("transactions")
-      .select("amount, transaction_type, status, executed_at")
+      .select("amount, transaction_type, executed_at")
       .gte("executed_at", currentMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
       .eq("status", "completed"),
     supabase
       .from("transactions")
-      .select("amount, transaction_type, status, executed_at")
+      .select("amount, transaction_type, executed_at")
       .gte("executed_at", previousMonthStart.toISOString())
       .lt("executed_at", currentMonthStart.toISOString())
       .eq("status", "completed"),
     supabase
       .from("transactions")
-      .select("amount, transaction_type, status, executed_at")
+      .select("amount, transaction_type, executed_at")
       .gte("executed_at", sixMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
       .eq("status", "completed"),
@@ -113,10 +109,8 @@ export async function AdminDashboardStats() {
       .order("recognized_at", { ascending: false })
       .limit(8),
     supabase
-      .from("accounts")
-      .select("account_id, credit_accounts(current_balance)")
-      .eq("account_type", "credit")
-      .eq("status", "active"),
+      .from("credit_accounts")
+      .select("account_id, current_balance, credit_limit"),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("loans")
@@ -136,9 +130,8 @@ export async function AdminDashboardStats() {
 
   const totalCustomers = customers.length;
   const activeAccounts = accounts.filter((account) => account.status === "active");
-  const totalAccounts = activeAccounts.length;
   const depositAccounts = activeAccounts.filter((account) =>
-    isWithdrawableAccountType(account.account_type)
+    isDepositAccount(account.account_type)
   );
   const withdrawableDeposits = depositAccounts.reduce(
     (sum, acc) => sum + Number(acc.balance || 0),
@@ -153,29 +146,33 @@ export async function AdminDashboardStats() {
 
   const currentDeposits = sumByType(currentTx, ["deposit"]);
   const currentWithdrawals = sumByType(currentTx, ["withdraw", "withdrawal"]);
-  const currentVolume = currentDeposits + currentWithdrawals;
-
-  const previousDeposits = sumByType(previousTx, ["deposit"]);
-  const previousWithdrawals = sumByType(previousTx, ["withdraw", "withdrawal"]);
-  const previousVolume = previousDeposits + previousWithdrawals;
-
-  const volumeGrowth =
-    previousVolume === 0
-      ? currentVolume > 0
-        ? 100
-        : 0
-      : ((currentVolume - previousVolume) / previousVolume) * 100;
-
-  const monthlyBars = buildMonthlySeries(sixMonthTx);
-  const accountMix = buildAccountMix(accounts);
+  const currentCardPurchases = sumByType(currentTx, ["credit_purchase"]);
+  const currentPayments = sumByType(currentTx, [
+    "credit_payment",
+    "loan_payment",
+    "bill_payment",
+  ]);
+  const currentVolume = sumAmounts(currentTx);
+  const previousVolume = sumAmounts(previousTx);
   const completedTransactionCount = currentTx.length;
+  const avgCompletedTicket =
+    completedTransactionCount > 0 ? currentVolume / completedTransactionCount : 0;
+  const netCustomerFlow = currentDeposits - currentWithdrawals;
+  const volumeGrowth = computeGrowth(currentVolume, previousVolume);
+  const monthlyBars = buildMonthlySeries(sixMonthTx);
+  const accountMix = buildAccountMix(activeAccounts);
 
   const currentBankIncome = sumIncome(currentIncome);
+  const previousBankIncome = sumIncome(previousIncome);
   const currentFeeIncome = sumIncomeByCategory(currentIncome, "fee");
   const currentInterestChargeIncome = sumIncomeByCategory(
     currentIncome,
     "interest_charge"
   );
+  const incomeGrowth = computeGrowth(currentBankIncome, previousBankIncome);
+  const avgIncomeEntry =
+    currentIncome.length > 0 ? currentBankIncome / currentIncome.length : 0;
+
   const activeLoans = loans.filter((loan) => loan.status === "active");
   const activeLoanCount = activeLoans.length;
   const outstandingLoanBalance = activeLoans.reduce(
@@ -185,119 +182,169 @@ export async function AdminDashboardStats() {
       Number(loan.accrued_interest || 0),
     0
   );
-  const outstandingCreditBalance = creditExposure.reduce((sum, account) => {
-    const creditAccount = Array.isArray(account.credit_accounts)
-      ? account.credit_accounts[0]
-      : account.credit_accounts;
+  const outstandingCreditBalance = creditExposure.reduce(
+    (sum, account) => sum + Number(account.current_balance || 0),
+    0
+  );
+  const totalCreditLimit = creditExposure.reduce(
+    (sum, account) => sum + Number(account.credit_limit || 0),
+    0
+  );
+  const creditUtilization =
+    totalCreditLimit > 0 ? outstandingCreditBalance / totalCreditLimit : 0;
+  const activeCreditBalanceCount = creditExposure.filter(
+    (account) => Number(account.current_balance || 0) > 0
+  ).length;
 
-    return sum + Number(creditAccount?.current_balance || 0);
-  }, 0);
-  const activeCreditBalanceCount = creditExposure.filter((account) => {
-    const creditAccount = Array.isArray(account.credit_accounts)
-      ? account.credit_accounts[0]
-      : account.credit_accounts;
-
-    return Number(creditAccount?.current_balance || 0) > 0;
-  }).length;
   const totalLentOut = outstandingLoanBalance + outstandingCreditBalance;
-  const estimatedLiquidCash = Math.max(withdrawableDeposits - totalLentOut, 0);
-  const liquidityGap = withdrawableDeposits - totalLentOut;
-  const potentialShortfall = Math.max(totalLentOut - withdrawableDeposits, 0);
-  const withdrawalCoverage =
-    withdrawableDeposits > 0
-      ? estimatedLiquidCash / withdrawableDeposits
-      : totalLentOut > 0
-        ? 0
-        : 1;
+  const liquidityBuffer = withdrawableDeposits - totalLentOut;
   const loanToDepositRatio =
-    withdrawableDeposits > 0
-      ? totalLentOut / withdrawableDeposits
-      : totalLentOut > 0
-        ? Number.POSITIVE_INFINITY
-        : 0;
-  const bankHealth = assessBankHealth({
-    withdrawableDeposits,
+    withdrawableDeposits > 0 ? totalLentOut / withdrawableDeposits : 0;
+  const liquidityBufferRatio =
+    withdrawableDeposits > 0 ? liquidityBuffer / withdrawableDeposits : 0;
+  const liquiditySignal = assessLiquiditySignal({
+    depositBase: withdrawableDeposits,
     totalLentOut,
-    withdrawalCoverage,
-    potentialShortfall,
     loanToDepositRatio,
+    liquidityBufferRatio,
   });
-  const previousBankIncome = sumIncome(previousIncome);
-  const incomeGrowth =
-    previousBankIncome === 0
-      ? currentBankIncome > 0
-        ? 100
-        : 0
-      : ((currentBankIncome - previousBankIncome) / previousBankIncome) * 100;
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr]">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryStatCard
+          title="Deposit Funding Base"
+          value={formatCurrency(withdrawableDeposits)}
+          subtitle="Active checking and savings balances"
+          icon={<PiggyBank className="h-4 w-4 text-cyan-400" />}
+        />
+        <SummaryStatCard
+          title="Lending Exposure"
+          value={formatCurrency(totalLentOut)}
+          subtitle="Loans outstanding plus card balances"
+          icon={<HandCoins className="h-4 w-4 text-cyan-400" />}
+        />
+        <SummaryStatCard
+          title="Bank Income MTD"
+          value={formatCurrency(currentBankIncome)}
+          subtitle="Recognized fee and interest revenue"
+          icon={<CircleDollarSign className="h-4 w-4 text-cyan-400" />}
+        />
+        <SummaryStatCard
+          title="Completed Transactions"
+          value={String(completedTransactionCount)}
+          subtitle="Customer activity completed this month"
+          icon={<ArrowRightLeft className="h-4 w-4 text-cyan-400" />}
+        />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.3fr_0.9fr]">
         <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
-                Real Cash Position
+                Liquidity Monitor
               </p>
-              <h2 className="mt-3 text-3xl font-bold text-white">
-                {formatCurrency(withdrawableDeposits)}
+              <h2 className={`mt-3 text-3xl font-bold ${liquiditySignal.headingClass}`}>
+                {liquiditySignal.label}
               </h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Checking and saving balances customers can withdraw today. Loans
-                and credit balances are tracked separately below.
+              <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                {liquiditySignal.summary}
               </p>
             </div>
 
             <div className="rounded-2xl bg-cyan-400/10 p-3">
-              <LineChart className="h-5 w-5 text-cyan-400" />
+              <Landmark className="h-5 w-5 text-cyan-400" />
             </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiMiniCard
+              label="Deposit Base"
+              value={formatCurrency(withdrawableDeposits)}
+              tone="neutral"
+            />
+            <KpiMiniCard
+              label="Funds Lent Out"
+              value={formatCurrency(totalLentOut)}
+              tone="warning"
+            />
+            <KpiMiniCard
+              label="Liquidity Buffer"
+              value={formatSignedCurrency(liquidityBuffer)}
+              tone={liquidityBuffer < 0 ? "danger" : "positive"}
+            />
+            <KpiMiniCard
+              label="Loan-to-Deposit"
+              value={formatRatio(loanToDepositRatio)}
+              tone={
+                loanToDepositRatio > 1
+                  ? "danger"
+                  : loanToDepositRatio > 0.85
+                    ? "warning"
+                    : "positive"
+              }
+            />
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <KpiMiniCard
-              label="Transaction Volume"
-              value={formatCurrency(currentVolume)}
+              label="Loan Book"
+              value={formatCurrency(outstandingLoanBalance)}
               tone="neutral"
             />
             <KpiMiniCard
-              label="Deposits"
-              value={formatCurrency(currentDeposits)}
-              tone="positive"
+              label="Card Balances"
+              value={formatCurrency(outstandingCreditBalance)}
+              tone="neutral"
             />
             <KpiMiniCard
-              label="Withdrawals"
-              value={formatCurrency(currentWithdrawals)}
-              tone="warning"
+              label="Card Utilization"
+              value={formatPercent(creditUtilization)}
+              tone={
+                creditUtilization > 0.9
+                  ? "danger"
+                  : creditUtilization > 0.7
+                    ? "warning"
+                    : "positive"
+              }
             />
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4 text-sm">
-            <TrendPill label="Volume vs last month" value={volumeGrowth} />
-            <p className="text-slate-500">
-              Last month: {formatCurrency(previousVolume)}
-            </p>
-            <p className="text-slate-500">
-              Estimated liquid cash: {formatCurrency(estimatedLiquidCash)}
-            </p>
+            <TrendPill label="Txn volume vs last month" value={volumeGrowth} />
+            <span className="rounded-full bg-slate-950/60 px-3 py-1.5 text-slate-300">
+              Active loans: {activeLoanCount}
+            </span>
+            <span className="rounded-full bg-slate-950/60 px-3 py-1.5 text-slate-300">
+              Cards carrying balance: {activeCreditBalanceCount}
+            </span>
           </div>
+
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            Directional demo signal only. OCC liquidity guidance and FDIC
+            loan-to-deposit concepts are useful operating cues, but no single ratio
+            should be treated as a full supervisory grade on its own.
+          </p>
         </section>
 
         <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
-                Bank Income
+                Revenue This Month
               </p>
               <h2 className="mt-3 text-3xl font-bold text-white">
                 {formatCurrency(currentBankIncome)}
               </h2>
               <p className="mt-2 text-sm text-slate-400">
-                Fee and interest-charge revenue recognized this month.
+                Recognized fee income and interest charges recorded in the bank
+                income ledger.
               </p>
             </div>
 
             <div className="rounded-2xl bg-cyan-400/10 p-3">
-              <DollarSign className="h-5 w-5 text-cyan-400" />
+              <Wallet className="h-5 w-5 text-cyan-400" />
             </div>
           </div>
 
@@ -308,8 +355,18 @@ export async function AdminDashboardStats() {
               tone="neutral"
             />
             <KpiMiniCard
-              label="Interest Charge"
+              label="Interest Charges"
               value={formatCurrency(currentInterestChargeIncome)}
+              tone="neutral"
+            />
+            <KpiMiniCard
+              label="Average Income Entry"
+              value={formatCurrency(avgIncomeEntry)}
+              tone="positive"
+            />
+            <KpiMiniCard
+              label="Entries Posted"
+              value={String(currentIncome.length)}
               tone="neutral"
             />
           </div>
@@ -323,169 +380,18 @@ export async function AdminDashboardStats() {
         </section>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <CompactStatCard
-          title="Total Customers"
-          value={String(totalCustomers)}
-          subtitle="Active customer records"
-          icon={<Wallet className="h-4 w-4 text-cyan-400" />}
-        />
-        <CompactStatCard
-          title="Total Accounts"
-          value={String(totalAccounts)}
-          subtitle="Active account records"
-          icon={<Landmark className="h-4 w-4 text-cyan-400" />}
-        />
-        <CompactStatCard
-          title="Average Deposit Balance"
-          value={formatCurrency(avgDepositBalance)}
-          subtitle="Checking + saving only"
-          icon={<PiggyBank className="h-4 w-4 text-cyan-400" />}
-        />
-        <CompactStatCard
-          title="Completed Transactions"
-          value={String(completedTransactionCount)}
-          subtitle="Completed this month"
-          icon={<CheckCircle2 className="h-4 w-4 text-cyan-400" />}
-        />
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-5 xl:grid-cols-[1.25fr_0.95fr]">
         <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
-          <div className="flex items-start justify-between gap-4">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
-                Lending Exposure
-              </p>
-              <h2 className="mt-3 text-3xl font-bold text-white">
-                {formatCurrency(totalLentOut)}
-              </h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Total amount the bank currently has lent out across approved
-                loans and active credit card balances.
+              <h3 className="text-xl font-bold text-white">Monthly Activity</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                Deposits and withdrawals over the last 6 months.
               </p>
             </div>
-
             <div className="rounded-2xl bg-cyan-400/10 p-3">
-              <HandCoins className="h-5 w-5 text-cyan-400" />
+              <Activity className="h-5 w-5 text-cyan-400" />
             </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            <KpiMiniCard
-              label="Loan Bills Due"
-              value={formatCurrency(outstandingLoanBalance)}
-              tone="warning"
-            />
-            <KpiMiniCard
-              label="Credit Balances"
-              value={formatCurrency(outstandingCreditBalance)}
-              tone="warning"
-            />
-            <KpiMiniCard
-              label="Interest Income"
-              value={formatCurrency(currentInterestChargeIncome)}
-              tone="neutral"
-            />
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4 text-sm">
-            <div className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-cyan-300">
-              <span>{activeLoanCount}</span>
-              <span>active loans</span>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-slate-950/60 px-3 py-1.5 text-slate-300">
-              <span>{activeCreditBalanceCount}</span>
-              <span>cards carrying balance</span>
-            </div>
-            <p className="text-slate-500">
-              Approved loan bills already include fixed interest for the full term.
-            </p>
-          </div>
-        </section>
-
-        <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
-                Bank Health
-              </p>
-              <h2 className={`mt-3 text-3xl font-bold ${bankHealth.headingClass}`}>
-                {bankHealth.label}
-              </h2>
-              <p className="mt-2 text-sm text-slate-400">
-                {bankHealth.summary}
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-cyan-400/10 p-3">
-              <Landmark className="h-5 w-5 text-cyan-400" />
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <KpiMiniCard
-              label="Withdrawable Deposits"
-              value={formatCurrency(withdrawableDeposits)}
-              tone="neutral"
-            />
-            <KpiMiniCard
-              label="Funds Lent Out"
-              value={formatCurrency(totalLentOut)}
-              tone="warning"
-            />
-            <KpiMiniCard
-              label="Estimated Liquid Cash"
-              value={formatCurrency(estimatedLiquidCash)}
-              tone={potentialShortfall > 0 ? "danger" : "positive"}
-            />
-            <KpiMiniCard
-              label="Loan-to-Deposit"
-              value={formatPercent(loanToDepositRatio)}
-              tone={loanToDepositRatio > 1 ? "danger" : loanToDepositRatio > 0.85 ? "warning" : "positive"}
-            />
-            <KpiMiniCard
-              label="Withdrawal Coverage"
-              value={formatPercent(withdrawalCoverage)}
-              tone={withdrawalCoverage < 0.2 ? "danger" : withdrawalCoverage < 0.4 ? "warning" : "positive"}
-            />
-            <KpiMiniCard
-              label="Liquidity Gap"
-              value={formatSignedCurrency(liquidityGap)}
-              tone={liquidityGap < 0 ? "danger" : "positive"}
-            />
-          </div>
-
-          <div
-            className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
-              potentialShortfall > 0
-                ? "border-red-400/20 bg-red-400/10 text-red-200"
-                : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-            }`}
-          >
-            {potentialShortfall > 0
-              ? `If every customer tried to withdraw all checking and saving balances now, the bank would face an estimated cash shortfall of ${formatCurrency(
-                  potentialShortfall
-                )}.`
-              : `If every customer withdrew now, the bank still has an estimated liquidity cushion of ${formatCurrency(
-                  estimatedLiquidCash
-                )}.`}
-          </div>
-
-          <p className="mt-4 text-xs text-slate-500">
-            Demo health view inspired by loan-to-deposit and liquidity coverage
-            concepts, not a full regulatory capital or liquidity report.
-          </p>
-        </section>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.9fr]">
-        <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
-          <div className="mb-5">
-            <h3 className="text-xl font-bold text-white">Cash Flow Overview</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Deposits and withdrawals over the last 6 months
-            </p>
           </div>
 
           <div className="grid h-[260px] grid-cols-6 items-end gap-3 sm:gap-4">
@@ -513,15 +419,27 @@ export async function AdminDashboardStats() {
             ))}
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-5 text-sm">
-            <div className="inline-flex items-center gap-2 text-slate-300">
-              <span className="h-3 w-3 rounded-full bg-emerald-400" />
-              Deposits
-            </div>
-            <div className="inline-flex items-center gap-2 text-slate-300">
-              <span className="h-3 w-3 rounded-full bg-amber-400" />
-              Withdrawals
-            </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiMiniCard
+              label="Deposits MTD"
+              value={formatCurrency(currentDeposits)}
+              tone="positive"
+            />
+            <KpiMiniCard
+              label="Withdrawals MTD"
+              value={formatCurrency(currentWithdrawals)}
+              tone="warning"
+            />
+            <KpiMiniCard
+              label="Card Purchases MTD"
+              value={formatCurrency(currentCardPurchases)}
+              tone="neutral"
+            />
+            <KpiMiniCard
+              label="Payments MTD"
+              value={formatCurrency(currentPayments)}
+              tone="neutral"
+            />
           </div>
         </section>
 
@@ -530,7 +448,7 @@ export async function AdminDashboardStats() {
             <div>
               <h3 className="text-xl font-bold text-white">Account Mix</h3>
               <p className="mt-1 text-sm text-slate-400">
-                Distribution by account type
+                Distribution across active products only.
               </p>
             </div>
 
@@ -570,20 +488,39 @@ export async function AdminDashboardStats() {
           </section>
 
           <section className="rounded-[28px] border border-white/10 bg-[#0c162a] p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm text-slate-400">Largest Deposit Balance</p>
-                <h3 className="mt-3 text-3xl font-bold text-white">
-                  {formatCurrency(largestDepositBalance)}
-                </h3>
-                <p className="mt-2 text-sm text-slate-500">
-                  Highest checking or saving balance currently on record.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-cyan-400/10 p-3">
-                <TrendingUp className="h-5 w-5 text-cyan-400" />
-              </div>
+            <div className="mb-4">
+              <h3 className="text-xl font-bold text-white">Operational Snapshot</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                Cleaner headline metrics with less repetition.
+              </p>
             </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CompactMetric label="Active customers" value={String(totalCustomers)} />
+              <CompactMetric label="Active products" value={String(activeAccounts.length)} />
+              <CompactMetric
+                label="Average deposit balance"
+                value={formatCurrency(avgDepositBalance)}
+              />
+              <CompactMetric
+                label="Average ticket size"
+                value={formatCurrency(avgCompletedTicket)}
+              />
+              <CompactMetric
+                label="Largest deposit balance"
+                value={formatCurrency(largestDepositBalance)}
+              />
+              <CompactMetric
+                label="Net customer flow"
+                value={formatSignedCurrency(netCustomerFlow)}
+                accent={netCustomerFlow < 0 ? "text-amber-300" : "text-emerald-300"}
+              />
+            </div>
+
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              These tiles intentionally avoid repeating deposit base, lending
+              exposure, or income figures already shown above.
+            </p>
           </section>
         </div>
       </div>
@@ -593,8 +530,7 @@ export async function AdminDashboardStats() {
           <div>
             <h3 className="text-xl font-bold text-white">Bank Income History</h3>
             <p className="mt-1 text-sm text-slate-400">
-              Recent fee and interest-charge revenue entries recognized by the
-              bank.
+              Recent fee and interest-charge revenue entries recognized by the bank.
             </p>
           </div>
 
@@ -668,7 +604,7 @@ export async function AdminDashboardStats() {
   );
 }
 
-function CompactStatCard({
+function SummaryStatCard({
   title,
   value,
   subtitle,
@@ -693,6 +629,23 @@ function CompactStatCard({
   );
 }
 
+function CompactMetric({
+  label,
+  value,
+  accent = "text-white",
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-2 text-xl font-bold ${accent}`}>{value}</p>
+    </div>
+  );
+}
+
 function KpiMiniCard({
   label,
   value,
@@ -707,9 +660,9 @@ function KpiMiniCard({
       ? "text-emerald-400"
       : tone === "danger"
         ? "text-red-300"
-      : tone === "warning"
-        ? "text-amber-400"
-        : "text-white";
+        : tone === "warning"
+          ? "text-amber-400"
+          : "text-white";
 
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
@@ -811,17 +764,11 @@ function DonutChart({
       </svg>
 
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-sm text-slate-400">Accounts</span>
+        <span className="text-sm text-slate-400">Active</span>
         <span className="text-3xl font-bold text-white">{total}</span>
       </div>
     </div>
   );
-}
-
-function sumByType(rows: TxRow[], types: string[]) {
-  return rows
-    .filter((row) => types.includes((row.transaction_type || "").toLowerCase()))
-    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
 }
 
 function buildAccountMix(accounts: AccountRow[]) {
@@ -880,6 +827,16 @@ function buildMonthlySeries(rows: TxRow[]) {
   }));
 }
 
+function sumAmounts(rows: TxRow[]) {
+  return rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+}
+
+function sumByType(rows: TxRow[], types: string[]) {
+  return rows
+    .filter((row) => types.includes((row.transaction_type || "").toLowerCase()))
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+}
+
 function sumIncome(rows: BankIncomeRow[]) {
   return rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 }
@@ -890,58 +847,60 @@ function sumIncomeByCategory(rows: BankIncomeRow[], category: string) {
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
 }
 
-function isWithdrawableAccountType(value: string | null) {
+function isDepositAccount(value: string | null) {
   const normalized = (value || "").toLowerCase();
   return normalized.includes("checking") || normalized.includes("saving");
 }
 
-function assessBankHealth({
-  withdrawableDeposits,
+function computeGrowth(currentValue: number, previousValue: number) {
+  if (previousValue === 0) {
+    return currentValue > 0 ? 100 : 0;
+  }
+
+  return ((currentValue - previousValue) / previousValue) * 100;
+}
+
+function assessLiquiditySignal({
+  depositBase,
   totalLentOut,
-  withdrawalCoverage,
-  potentialShortfall,
   loanToDepositRatio,
+  liquidityBufferRatio,
 }: {
-  withdrawableDeposits: number;
+  depositBase: number;
   totalLentOut: number;
-  withdrawalCoverage: number;
-  potentialShortfall: number;
   loanToDepositRatio: number;
+  liquidityBufferRatio: number;
 }) {
-  if (withdrawableDeposits <= 0 && totalLentOut <= 0) {
+  if (depositBase <= 0 && totalLentOut <= 0) {
     return {
-      label: "Idle",
-      summary: "No active deposits or lending are on the books yet.",
+      label: "Inactive",
+      summary: "No active deposit funding or lending exposure has been recorded yet.",
       headingClass: "text-white",
     };
   }
 
-  if (
-    potentialShortfall > 0 ||
-    withdrawalCoverage < 0.2 ||
-    loanToDepositRatio > 1
-  ) {
+  if (loanToDepositRatio > 1 || liquidityBufferRatio < 0) {
     return {
-      label: "Risky",
+      label: "Elevated",
       summary:
-        "Lending is consuming too much of the deposit base, so a full withdrawal wave would likely stress cash availability.",
+        "Outstanding lending now exceeds the current deposit base, so liquidity should be reviewed before more credit is extended.",
       headingClass: "text-red-300",
     };
   }
 
-  if (withdrawalCoverage < 0.4 || loanToDepositRatio > 0.85) {
+  if (loanToDepositRatio > 0.85 || liquidityBufferRatio < 0.15) {
     return {
-      label: "Watch",
+      label: "Tight",
       summary:
-        "The bank is still functioning, but liquidity is getting tighter and should be monitored before more lending is approved.",
+        "Funding still covers the book, but the buffer is getting thinner and deserves closer monitoring.",
       headingClass: "text-amber-300",
     };
   }
 
   return {
-    label: "Healthy",
+    label: "Stable",
     summary:
-      "Liquid cash still covers a meaningful share of deposits, so the current lending book looks manageable for this demo bank.",
+      "Deposit funding still leaves a visible operating buffer after current loan and card exposure.",
     headingClass: "text-emerald-300",
   };
 }
@@ -953,9 +912,13 @@ function formatIncomeCategory(value: string | null) {
   return "Income";
 }
 
+function formatRatio(value: number) {
+  if (!Number.isFinite(value)) return "N/A";
+  return `${value.toFixed(2)}x`;
+}
+
 function formatPercent(value: number) {
   if (!Number.isFinite(value)) return "N/A";
-
   return `${(value * 100).toFixed(1)}%`;
 }
 

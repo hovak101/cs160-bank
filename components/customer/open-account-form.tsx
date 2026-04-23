@@ -4,6 +4,10 @@ import { useState } from "react";
 import { Plus, X, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import {
+  isValidSecurityCodeFormat,
+  normalizeSecurityCode,
+} from "@/lib/banking/security-code";
 
 const ACCOUNT_OPTIONS = [
   {
@@ -27,14 +31,24 @@ export function OpenAccountForm() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedType, setSelectedType] = useState<string>(ACCOUNT_OPTIONS[0].value);
+  const [securityCode, setSecurityCode] = useState("");
+  const [formError, setFormError] = useState("");
   const router = useRouter();
 
   const activeOption =
     ACCOUNT_OPTIONS.find((option) => option.value === selectedType) ??
     ACCOUNT_OPTIONS[0];
+  const isCreditCard = activeOption.value === "Credit Card";
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setFormError("");
+
+    if (isCreditCard && !isValidSecurityCodeFormat(securityCode)) {
+      setFormError("Credit cards require a valid 3-digit security code.");
+      return;
+    }
+
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
@@ -42,6 +56,7 @@ export function OpenAccountForm() {
       account_name: formData.get("account_name"),
       account_type: formData.get("account_type"),
       currency: "USD",
+      security_code: isCreditCard ? securityCode : undefined,
     };
 
     try {
@@ -53,13 +68,16 @@ export function OpenAccountForm() {
 
       if (res.ok) {
         setIsOpen(false);
+        setSecurityCode("");
+        setFormError("");
         router.refresh();
       } else {
         const error = await res.json();
-        alert(error.error || "Failed to create account");
+        setFormError(error.error || "Failed to create account.");
       }
     } catch (err) {
       console.error("Submission error:", err);
+      setFormError("Something went wrong while opening the account.");
     } finally {
       setLoading(false);
     }
@@ -109,7 +127,14 @@ export function OpenAccountForm() {
                 <select
                   name="account_type"
                   value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedType(e.target.value);
+                    setFormError("");
+
+                    if (e.target.value !== "Credit Card") {
+                      setSecurityCode("");
+                    }
+                  }}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
                   required
                 >
@@ -129,6 +154,43 @@ export function OpenAccountForm() {
                   {activeOption.description}
                 </p>
               </div>
+
+              {isCreditCard ? (
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1 block">
+                      Security Code
+                    </label>
+                    <input
+                      name="security_code"
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={3}
+                      value={securityCode}
+                      onChange={(e) => {
+                        setSecurityCode(normalizeSecurityCode(e.target.value));
+                        setFormError("");
+                      }}
+                      placeholder="3-digit code"
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
+                      required
+                    />
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      This demo now requires a 3-digit security code for credit
+                      card purchases and cash advances. In the production app,
+                      changing or resetting this code will move to a verified
+                      email flow.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {formError ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {formError}
+                </div>
+              ) : null}
 
               <Button
                 type="submit"

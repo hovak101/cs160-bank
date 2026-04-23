@@ -1,8 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, CreditCard, Loader2 } from "lucide-react";
+import {
+  isValidSecurityCodeFormat,
+  normalizeSecurityCode,
+} from "@/lib/banking/security-code";
 
 type CreditAccount = {
   account_id: string;
@@ -14,6 +19,7 @@ type CreditAccount = {
   payment_due_at: string | null;
   card_brand: string;
   card_last4: string;
+  security_code_mode: string;
 };
 
 export function CreditCardPurchaseForm({
@@ -26,6 +32,7 @@ export function CreditCardPurchaseForm({
   const [merchant, setMerchant] = useState("");
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
+  const [securityCode, setSecurityCode] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -57,6 +64,11 @@ export function CreditCardPurchaseForm({
       return;
     }
 
+    if (!isValidSecurityCodeFormat(securityCode)) {
+      setError("Please enter the 3-digit security code for this card.");
+      return;
+    }
+
     if (selectedAccountData && numericAmount > selectedAccountData.available_credit) {
       setError("Purchase exceeds available credit.");
       return;
@@ -72,6 +84,7 @@ export function CreditCardPurchaseForm({
             merchant,
             category,
             amount: numericAmount,
+            security_code: securityCode,
           }),
         });
 
@@ -85,6 +98,7 @@ export function CreditCardPurchaseForm({
         setAmount("");
         setMerchant("");
         setCategory("");
+        setSecurityCode("");
         router.refresh();
         setMessage("Credit card purchase posted successfully.");
       } catch {
@@ -100,12 +114,12 @@ export function CreditCardPurchaseForm({
         <p className="mt-2 text-slate-400">
           Open a credit card first to simulate purchases and rewards.
         </p>
-        <a
+        <Link
           href="/customer/accounts"
           className="mt-5 inline-flex rounded-xl bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300"
         >
           Go to Accounts
-        </a>
+        </Link>
       </div>
     );
   }
@@ -119,7 +133,8 @@ export function CreditCardPurchaseForm({
         <div>
           <h2 className="text-xl font-bold text-white">Post a Card Purchase</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Simulate an approved credit card purchase the way a live bank card would post it.
+            Simulate an approved credit card purchase the way a live bank card would
+            post it.
           </p>
         </div>
 
@@ -131,12 +146,13 @@ export function CreditCardPurchaseForm({
               setSelectedAccount(e.target.value);
               setError("");
               setMessage("");
+              setSecurityCode("");
             }}
             className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
           >
             {accounts.map((account) => (
               <option key={account.account_id} value={account.account_id}>
-                {account.account_name} • {account.card_brand} • ****{account.card_last4}
+                {account.account_name} - {account.card_brand} - ****{account.card_last4}
               </option>
             ))}
           </select>
@@ -175,6 +191,29 @@ export function CreditCardPurchaseForm({
               className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-cyan-400"
             />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-slate-300">Security Code</label>
+          <input
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={3}
+            value={securityCode}
+            onChange={(e) => {
+              setSecurityCode(normalizeSecurityCode(e.target.value));
+              setError("");
+              setMessage("");
+            }}
+            placeholder="3-digit code"
+            className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-cyan-400"
+          />
+          <p className="text-xs leading-5 text-slate-500">
+            {selectedAccountData?.security_code_mode === "legacy_demo"
+              ? "This older demo card temporarily uses the last 3 digits from the visible 4-digit card ending. This will be replaced by email-based reset/change in the production app."
+              : "Enter the 3-digit security code you set when opening this card. The input stays masked while you type."}
+          </p>
         </div>
 
         {error ? (
@@ -218,7 +257,7 @@ export function CreditCardPurchaseForm({
             <p className="text-sm text-slate-400">Selected Card</p>
             <p className="mt-1 text-base font-semibold text-white">
               {selectedAccountData
-                ? `${selectedAccountData.account_name} • ${selectedAccountData.card_brand} • ****${selectedAccountData.card_last4}`
+                ? `${selectedAccountData.account_name} - ${selectedAccountData.card_brand} - ****${selectedAccountData.card_last4}`
                 : "No card selected"}
             </p>
 

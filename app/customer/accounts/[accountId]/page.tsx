@@ -79,6 +79,7 @@ type CreditCardRow = {
   exp_year: number;
   rewards_program: string;
   rewards_rate: number;
+  security_code_mode: string;
 };
 
 type SavingsMonthlyActivityRow = {
@@ -162,7 +163,7 @@ export default async function AccountDetailPage({ params }: PageProps) {
         ? supabase
             .from("credit_cards")
             .select(
-              "account_id, card_brand, card_last4, card_status, cardholder_name, exp_month, exp_year, rewards_program, rewards_rate"
+              "account_id, card_brand, card_last4, card_status, cardholder_name, exp_month, exp_year, rewards_program, rewards_rate, security_code_mode"
             )
             .eq("account_id", account.account_id)
             .maybeSingle()
@@ -405,6 +406,28 @@ export default async function AccountDetailPage({ params }: PageProps) {
           </div>
         </Card>
       </div>
+
+      {isCreditAccount(account.account_type) && creditDetails && creditCard ? (
+        <Card className="border-white/10 bg-[#0f172a] p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-400">
+              <ShieldCheck size={22} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">Security code reminder</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                {creditCard.security_code_mode === "legacy_demo"
+                  ? "This older demo card temporarily uses the last 3 digits from the visible 4-digit card ending for purchases and cash advances."
+                  : "Use the 3-digit security code you set when this card was issued whenever you make a purchase or take a cash advance."}
+              </p>
+              <p className="mt-3 text-sm text-slate-500">
+                This demo prompt will be replaced by verified email reset and change
+                requests when the production app ships.
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {isCreditAccount(account.account_type) && creditDetails ? (
         <ClaimCreditRewardsForm

@@ -22,7 +22,14 @@ export function getCustomerDisplayName(customer: {
   return fullName || "Cardholder";
 }
 
-export function buildCreditCardSeed(cardholderName: string) {
+export function buildCreditCardSeed(
+  cardholderName: string,
+  options?: {
+    security_code_hash?: string;
+    security_code_mode?: string;
+    security_code_last_updated_at?: string;
+  }
+) {
   const randomDigits = Array.from({ length: 16 }, () =>
     Math.floor(Math.random() * 10).toString()
   ).join("");
@@ -36,6 +43,10 @@ export function buildCreditCardSeed(cardholderName: string) {
     card_status: "active",
     rewards_program: "Cash Back",
     rewards_rate: CREDIT_REWARDS_RATE,
+    security_code_hash: options?.security_code_hash ?? "",
+    security_code_last_updated_at:
+      options?.security_code_last_updated_at ?? new Date().toISOString(),
+    security_code_mode: options?.security_code_mode ?? "user_set",
     exp_month: expDate.getMonth() + 1,
     exp_year: expDate.getFullYear(),
   };

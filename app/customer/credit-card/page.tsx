@@ -18,6 +18,7 @@ type CreditCardRow = {
   account_id: string;
   card_brand: string;
   card_last4: string;
+  security_code_mode: string;
 };
 
 export default async function CreditCardPage() {
@@ -59,7 +60,7 @@ export default async function CreditCardPage() {
     accountIds.length > 0
       ? supabase
           .from("credit_cards")
-          .select("account_id, card_brand, card_last4")
+          .select("account_id, card_brand, card_last4, security_code_mode")
           .in("account_id", accountIds)
       : Promise.resolve({ data: [] as CreditCardRow[] }),
   ]);
@@ -86,8 +87,13 @@ export default async function CreditCardPage() {
         payment_due_at: creditAccount?.payment_due_at ?? null,
         card_brand: creditCard?.card_brand ?? "Visa",
         card_last4: creditCard?.card_last4 ?? account.account_number?.slice(-4) ?? "0000",
+        security_code_mode: creditCard?.security_code_mode ?? "legacy_demo",
       };
     }) ?? [];
+
+  const hasLegacySecurityCode = accounts.some(
+    (account) => account.security_code_mode === "legacy_demo"
+  );
 
   return (
     <div className="space-y-8">
@@ -103,6 +109,15 @@ export default async function CreditCardPage() {
           <p className="mt-2 max-w-2xl text-slate-400">
             Simulate purchases, review available credit, and track the minimum payment due on your active cards.
           </p>
+
+          <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+            Enter your 3-digit security code whenever you post a card purchase
+            or take a cash advance. In the production app, security-code
+            changes will move to verified email confirmation.
+            {hasLegacySecurityCode
+              ? " Older demo cards that existed before this update temporarily use the last 3 digits from the visible 4-digit card ending."
+              : ""}
+          </div>
         </div>
       </section>
 

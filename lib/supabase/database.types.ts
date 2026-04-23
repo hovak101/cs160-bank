@@ -312,6 +312,9 @@ export type Database = {
           exp_year: number
           rewards_program: string
           rewards_rate: number
+          security_code_hash: string
+          security_code_last_updated_at: string
+          security_code_mode: string
           updated_at: string
         }
         Insert: {
@@ -326,6 +329,9 @@ export type Database = {
           exp_year: number
           rewards_program?: string
           rewards_rate?: number
+          security_code_hash: string
+          security_code_last_updated_at?: string
+          security_code_mode?: string
           updated_at?: string
         }
         Update: {
@@ -340,6 +346,9 @@ export type Database = {
           exp_year?: number
           rewards_program?: string
           rewards_rate?: number
+          security_code_hash?: string
+          security_code_last_updated_at?: string
+          security_code_mode?: string
           updated_at?: string
         }
         Relationships: [

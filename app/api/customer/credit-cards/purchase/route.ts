@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { computeCreditMinimumPayment, isCreditAccount } from "@/lib/banking/rules";
+import { verifySecurityCode } from "@/lib/banking/security-code.server";
+import {
+  isValidSecurityCodeFormat,
+  normalizeSecurityCode,
+} from "@/lib/banking/security-code";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +28,18 @@ export async function POST(request: Request) {
     const merchant = String(body.merchant ?? "").trim();
     const category = String(body.category ?? "").trim();
     const amount = Number(body.amount ?? 0);
+    const securityCode = normalizeSecurityCode(body.security_code);
 
     if (!accountId || !merchant || !Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json(
         { error: "Credit account, merchant, and valid amount are required." },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidSecurityCodeFormat(securityCode)) {
+      return NextResponse.json(
+        { error: "A valid 3-digit security code is required." },
         { status: 400 }
       );
     }
@@ -68,7 +81,9 @@ export async function POST(request: Request) {
 
     const { data: creditAccount, error: creditAccountError } = await supabase
       .from("credit_accounts")
-      .select("account_id, available_credit, current_balance, minimum_payment_due, rewards_points, statement_balance")
+      .select(
+        "account_id, available_credit, current_balance, minimum_payment_due, rewards_points, statement_balance"
+      )
       .eq("account_id", accountId)
       .single();
 
@@ -93,11 +108,32 @@ export async function POST(request: Request) {
 
     const { data: creditCard } = await supabase
       .from("credit_cards")
-      .select("rewards_rate")
+      .select("card_status, rewards_rate, security_code_hash")
       .eq("account_id", accountId)
       .maybeSingle();
 
-    const rewardsRate = Number(creditCard?.rewards_rate ?? 0);
+    if (!creditCard) {
+      return NextResponse.json(
+        { error: "Credit card details not found." },
+        { status: 404 }
+      );
+    }
+
+    if ((creditCard.card_status ?? "").toLowerCase() !== "active") {
+      return NextResponse.json(
+        { error: "Only active credit cards can be used for purchases." },
+        { status: 400 }
+      );
+    }
+
+    if (!verifySecurityCode(securityCode, creditCard.security_code_hash)) {
+      return NextResponse.json(
+        { error: "Security code does not match this card." },
+        { status: 400 }
+      );
+    }
+
+    const rewardsRate = Number(creditCard.rewards_rate ?? 0);
     const rewardsEarned = amount * rewardsRate;
     const nextBalance = Number(creditAccount.current_balance || 0) + amount;
     const nextStatementBalance =
@@ -124,21 +160,19 @@ export async function POST(request: Request) {
     }
 
     const description = category
-      ? `${merchant} purchase • ${category}`
+      ? `${merchant} purchase - ${category}`
       : `${merchant} purchase`;
 
-    const { error: transactionError } = await supabase
-      .from("transactions")
-      .insert({
-        reference_number: `CRD-${Date.now()}`,
-        source_account_id: accountId,
-        destination_account_id: null,
-        amount,
-        transaction_type: "credit_purchase",
-        status: "completed",
-        description,
-        executed_at: nowIso,
-      });
+    const { error: transactionError } = await supabase.from("transactions").insert({
+      reference_number: `CRD-${Date.now()}`,
+      source_account_id: accountId,
+      destination_account_id: null,
+      amount,
+      transaction_type: "credit_purchase",
+      status: "completed",
+      description,
+      executed_at: nowIso,
+    });
 
     if (transactionError) {
       return NextResponse.json(

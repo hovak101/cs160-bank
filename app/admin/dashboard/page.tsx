@@ -40,27 +40,28 @@ export default async function AdminDashboardPage() {
               Welcome back, {name}
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-400 lg:text-base">
-              A cleaner view of operations, customer activity, and revenue so
-              the most important bank signals are easier to scan.
+              A cleaner operating view of funding, lending, customer activity,
+              and recognized bank income so the most important signals are easier
+              to scan quickly.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
               <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                View
+                Priority
               </p>
               <p className="mt-1 text-sm font-semibold text-white">
-                Monthly operations snapshot
+                Liquidity, revenue, and activity in one pass
               </p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
               <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                Focus
+                Method
               </p>
               <p className="mt-1 text-sm font-semibold text-white">
-                Liquidity, lending, and bank income
+                Fewer duplicate cards and more data-grounded metrics
               </p>
             </div>
           </div>
