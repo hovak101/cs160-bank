@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, Landmark, LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LogoutButton } from "@/components/logout-button";
+import { createClient } from "@/lib/supabase/client";
 
 type NavItem = {
   label: string;
@@ -105,6 +106,23 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: "Reports",
+    href: "/admin/reports",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-5 w-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <path d="M3 3v18h18" />
+        <path d="M7 16l4-8 4 4 5-6" />
+      </svg>
+    ),
+  },
+  {
     label: "Settings",
     href: "/admin/settings",
     icon: (
@@ -126,6 +144,14 @@ const navItems: NavItem[] = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? null);
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#020b1d] text-white">
@@ -207,7 +233,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </button>
 
             <span className="hidden text-sm text-slate-400 md:block">
-              admin@vitalitybank.com
+              {userEmail}
             </span>
 
             <LogoutButton />
