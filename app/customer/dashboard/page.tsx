@@ -49,7 +49,7 @@ const quickActions = [
   {
     title: "Bill Pay",
     description: "Manage and schedule payments from checking accounts.",
-    href: "/customer/bill-pay",
+    href: "/customer/bill-payments",
     icon: CreditCard,
   },
   {
