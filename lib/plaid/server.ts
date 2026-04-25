@@ -183,7 +183,7 @@ export async function createPlaidLinkToken(params: {
       client_user_id: params.clientUserId,
       legal_name: params.legalName,
     },
-    client_name: "CS160 Bank",
+    client_name: "Vitality Bank",
     products: ["auth", "transfer"],
     language: "en",
     country_codes: ["US"],

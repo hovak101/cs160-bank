@@ -388,7 +388,7 @@ export function ExternalTransferForm({
             {isSandboxDemo ? (
               <p className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm leading-6 text-cyan-100">
                 Sandbox demo mode is active. Move Money In is unlimited for easier demos,
-                while Move Money Out mirrors the selected CS160 Bank account balance to
+                while Move Money Out mirrors the selected Vitality Bank account balance to
                 avoid Plaid ledger funding errors.
               </p>
             ) : null}
@@ -411,7 +411,7 @@ export function ExternalTransferForm({
               <ArrowDownLeft className="mb-3 text-cyan-400" size={18} />
               <p className="font-semibold">Move Money In</p>
               <p className="mt-1 text-sm text-slate-400">
-                Pull money from your external bank into CS160 Bank.
+                Pull money from your external bank into Vitality Bank.
               </p>
             </button>
 

@@ -27,7 +27,7 @@ const MODE_OPTIONS: Array<{
   {
     mode: "internal",
     title: "Internal Transfer",
-    description: "Move money between your CS160 Bank accounts or pay your credit card.",
+    description: "Move money between your Vitality Bank accounts or pay your credit card.",
     icon: ArrowLeftRight,
   },
   {
@@ -39,7 +39,7 @@ const MODE_OPTIONS: Array<{
   {
     mode: "external",
     title: "External Transfer",
-    description: "Move money between CS160 Bank and a linked Plaid account.",
+    description: "Move money between Vitality Bank and a linked Plaid account.",
     icon: Landmark,
   },
 ];
