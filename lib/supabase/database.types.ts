@@ -341,6 +341,9 @@ export type Database = {
           exp_year: number
           rewards_program: string
           rewards_rate: number
+          security_code_hash: string
+          security_code_last_updated_at: string
+          security_code_mode: string
           updated_at: string
         }
         Insert: {
@@ -355,6 +358,9 @@ export type Database = {
           exp_year: number
           rewards_program?: string
           rewards_rate?: number
+          security_code_hash: string
+          security_code_last_updated_at?: string
+          security_code_mode?: string
           updated_at?: string
         }
         Update: {
@@ -369,6 +375,9 @@ export type Database = {
           exp_year?: number
           rewards_program?: string
           rewards_rate?: number
+          security_code_hash?: string
+          security_code_last_updated_at?: string
+          security_code_mode?: string
           updated_at?: string
         }
         Relationships: [
@@ -643,6 +652,74 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "transactions"
             referencedColumns: ["transaction_id"]
+          },
+        ]
+      }
+      plaid_linked_accounts: {
+        Row: {
+          access_token_auth_tag: string
+          access_token_iv: string
+          created_at: string
+          customer_id: string
+          encrypted_access_token: string
+          institution_name: string | null
+          last_verified_at: string | null
+          linked_account_id: string
+          plaid_account_id: string
+          plaid_account_mask: string | null
+          plaid_account_name: string
+          plaid_account_official_name: string | null
+          plaid_account_subtype: string | null
+          plaid_account_type: string | null
+          plaid_item_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          access_token_auth_tag: string
+          access_token_iv: string
+          created_at?: string
+          customer_id: string
+          encrypted_access_token: string
+          institution_name?: string | null
+          last_verified_at?: string | null
+          linked_account_id?: string
+          plaid_account_id: string
+          plaid_account_mask?: string | null
+          plaid_account_name: string
+          plaid_account_official_name?: string | null
+          plaid_account_subtype?: string | null
+          plaid_account_type?: string | null
+          plaid_item_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          access_token_auth_tag?: string
+          access_token_iv?: string
+          created_at?: string
+          customer_id?: string
+          encrypted_access_token?: string
+          institution_name?: string | null
+          last_verified_at?: string | null
+          linked_account_id?: string
+          plaid_account_id?: string
+          plaid_account_mask?: string | null
+          plaid_account_name?: string
+          plaid_account_official_name?: string | null
+          plaid_account_subtype?: string | null
+          plaid_account_type?: string | null
+          plaid_item_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plaid_linked_accounts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["customer_id"]
           },
         ]
       }

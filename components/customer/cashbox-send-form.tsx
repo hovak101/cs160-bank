@@ -42,9 +42,13 @@ type FundingSource =
 export default function CashboxSendForm({
   accounts,
   cashboxBalance,
+  embedded = false,
+  continueHref = "/customer/cashbox",
 }: {
   accounts: Account[];
   cashboxBalance: number;
+  embedded?: boolean;
+  continueHref?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -334,7 +338,7 @@ export default function CashboxSendForm({
 
   function handleContinueCashbox() {
     setShowSuccessModal(false);
-    router.push("/customer/cashbox");
+    router.push(continueHref);
   }
 
   function handleGoDashboard() {
@@ -345,13 +349,15 @@ export default function CashboxSendForm({
   return (
     <>
       <div className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[#0f172a] p-8">
-          <h1 className="text-3xl font-bold text-white">Send to CashBox</h1>
-          <p className="mt-2 text-slate-400">
-            Send money to another user using their phone number with extra
-            confirmation steps.
-          </p>
-        </section>
+        {!embedded ? (
+          <section className="rounded-[32px] border border-white/10 bg-[#0f172a] p-8">
+            <h1 className="text-3xl font-bold text-white">Send to CashBox</h1>
+            <p className="mt-2 text-slate-400">
+              Send money to another user using their phone number with extra
+              confirmation steps.
+            </p>
+          </section>
+        ) : null}
 
         <div className="flex flex-wrap gap-3">
           <StepBadge
@@ -401,12 +407,14 @@ export default function CashboxSendForm({
                   {lookupLoading ? "Searching..." : "Find Recipient"}
                 </button>
 
-                <Link
-                  href="/customer/cashbox"
-                  className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-300"
-                >
-                  Back to CashBox
-                </Link>
+                {!embedded ? (
+                  <Link
+                    href="/customer/cashbox"
+                    className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-300"
+                  >
+                    Back to CashBox
+                  </Link>
+                ) : null}
               </div>
 
               {recipient ? (
@@ -613,7 +621,7 @@ export default function CashboxSendForm({
                 onClick={handleContinueCashbox}
                 className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
               >
-                Continue using CashBox
+                {embedded ? "Continue in Transfers" : "Continue using CashBox"}
               </button>
 
               <button

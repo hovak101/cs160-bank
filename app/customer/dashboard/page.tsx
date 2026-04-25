@@ -115,8 +115,10 @@ type Transaction = {
   transaction_id: string;
   amount: number;
   description: string | null;
+  destination_account_id: string | null;
   executed_at: string | null;
   reference_number: string | null;
+  source_account_id: string | null;
   status: string | null;
   transaction_type: string | null;
 };
@@ -636,6 +638,10 @@ function formatPhone(phone: string | null) {
   return `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+function normalizePhone(phone: string | null | undefined) {
+  return String(phone ?? "").replace(/\D/g, "");
+}
+
 function parseCashboxDescription(description: string | null) {
   const text = description ?? "";
 
@@ -674,6 +680,7 @@ function getAccountLabel(
   return `${account.account_name} • ****${account.account_number?.slice(-4)}`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getTransactionMeta(
   tx: Transaction,
   accountMap: Map<string, Account>,
@@ -686,6 +693,7 @@ function getTransactionMeta(
     tx.destination_account_id && accountMap.has(tx.destination_account_id)
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const sourceLabel = getAccountLabel(tx.source_account_id, accountMap);
   const destinationLabel = getAccountLabel(tx.destination_account_id, accountMap);
   const normalizedType = (tx.transaction_type || "").toLowerCase();
