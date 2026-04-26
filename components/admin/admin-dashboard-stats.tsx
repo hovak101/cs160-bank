@@ -144,8 +144,12 @@ export async function AdminDashboardStats() {
     0
   );
 
-  const currentDeposits = sumByType(currentTx, ["deposit"]);
-  const currentWithdrawals = sumByType(currentTx, ["withdraw", "withdrawal"]);
+  const currentDeposits = sumByType(currentTx, ["deposit", "atm_deposit"]);
+  const currentWithdrawals = sumByType(currentTx, [
+    "withdraw",
+    "withdrawal",
+    "atm_withdrawal",
+  ]);
   const currentCardPurchases = sumByType(currentTx, ["credit_purchase"]);
   const currentPayments = sumByType(currentTx, [
     "credit_payment",
@@ -811,8 +815,14 @@ function buildMonthlySeries(rows: TxRow[]) {
     const type = (row.transaction_type || "").toLowerCase();
     const amount = Number(row.amount || 0);
 
-    if (type === "deposit") month.deposit += amount;
-    if (type === "withdraw" || type === "withdrawal") month.withdraw += amount;
+    if (type === "deposit" || type === "atm_deposit") month.deposit += amount;
+    if (
+      type === "withdraw" ||
+      type === "withdrawal" ||
+      type === "atm_withdrawal"
+    ) {
+      month.withdraw += amount;
+    }
   }
 
   const maxValue = Math.max(

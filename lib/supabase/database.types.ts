@@ -86,6 +86,79 @@ export type Database = {
           },
         ]
       }
+      atm_simulations: {
+        Row: {
+          account_id: string
+          action: string
+          amount: number
+          atm_id: string
+          atm_location: string
+          atm_name: string
+          atm_simulation_id: string
+          completed_at: string | null
+          created_at: string
+          customer_id: string
+          status: string
+          transaction_id: string
+          updated_at: string
+          verification_code: string | null
+        }
+        Insert: {
+          account_id: string
+          action: string
+          amount: number
+          atm_id: string
+          atm_location: string
+          atm_name: string
+          atm_simulation_id?: string
+          completed_at?: string | null
+          created_at?: string
+          customer_id: string
+          status?: string
+          transaction_id: string
+          updated_at?: string
+          verification_code?: string | null
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          amount?: number
+          atm_id?: string
+          atm_location?: string
+          atm_name?: string
+          atm_simulation_id?: string
+          completed_at?: string | null
+          created_at?: string
+          customer_id?: string
+          status?: string
+          transaction_id?: string
+          updated_at?: string
+          verification_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atm_simulations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "atm_simulations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "atm_simulations_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "transactions"
+            referencedColumns: ["transaction_id"]
+          },
+        ]
+      }
       bank_income: {
         Row: {
           amount: number
@@ -891,6 +964,8 @@ export type Database = {
         | "transfer"
         | "fee"
         | "interest"
+        | "atm_withdrawal"
+        | "atm_deposit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1046,6 +1121,8 @@ export const Constants = {
         "transfer",
         "fee",
         "interest",
+        "atm_withdrawal",
+        "atm_deposit",
       ],
     },
   },

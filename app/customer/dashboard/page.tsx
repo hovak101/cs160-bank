@@ -6,7 +6,6 @@ import {
   CreditCard,
   HandCoins,
   Inbox,
-  MapPin,
   ScanLine,
   Wallet,
 } from "lucide-react";
@@ -38,9 +37,9 @@ const quickActions = [
     icon: ArrowLeftRight,
   },
   {
-    title: "Withdraw",
-    description: "Withdraw cash or take a credit cash advance.",
-    href: "/customer/withdraw",
+    title: "ATM",
+    description: "Find a nearby ATM, then start a withdrawal or deposit simulation.",
+    href: "/customer/atm?action=withdraw",
     icon: Banknote,
   },
   {
@@ -72,12 +71,6 @@ const quickActions = [
     description: "Manage and schedule payments from checking accounts.",
     href: "/customer/bill-payments",
     icon: CreditCard,
-  },
-  {
-    title: "Find ATM",
-    description: "Locate the nearest ATM from your current area.",
-    href: "/customer/dashboard/find-atm",
-    icon: MapPin,
   },
 ];
 
@@ -614,8 +607,12 @@ function formatTransactionType(type: string | null) {
       return "Fee";
     case "interest":
       return "Interest Credit";
+    case "atm_withdrawal":
+      return "ATM Withdrawal";
     case "withdrawal":
       return "Withdrawal";
+    case "atm_deposit":
+      return "ATM Deposit";
     case "deposit":
       return "Deposit";
     default:
@@ -728,19 +725,32 @@ function getTransactionMeta(
     };
   }
 
-  if (normalizedType === "deposit") {
+  if (normalizedType === "deposit" || normalizedType === "atm_deposit") {
     return {
       direction: "incoming" as const,
-      title: "Deposit",
-      subtitle: tx.description || "Deposit completed",
+      title: normalizedType === "atm_deposit" ? "ATM Deposit" : "Deposit",
+      subtitle:
+        tx.description ||
+        (normalizedType === "atm_deposit"
+          ? "ATM deposit completed"
+          : "Deposit completed"),
     };
   }
 
-  if (normalizedType === "withdraw" || normalizedType === "withdrawal") {
+  if (
+    normalizedType === "withdraw" ||
+    normalizedType === "withdrawal" ||
+    normalizedType === "atm_withdrawal"
+  ) {
     return {
       direction: "outgoing" as const,
-      title: "Withdrawal",
-      subtitle: tx.description || "Withdrawal completed",
+      title:
+        normalizedType === "atm_withdrawal" ? "ATM Withdrawal" : "Withdrawal",
+      subtitle:
+        tx.description ||
+        (normalizedType === "atm_withdrawal"
+          ? "ATM withdrawal completed"
+          : "Withdrawal completed"),
     };
   }
 

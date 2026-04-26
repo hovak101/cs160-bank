@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -35,7 +36,12 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
   const [isPending, startTransition] = useTransition();
 
   const sourceAccounts = useMemo(
-    () => accounts.filter((account) => !isCreditAccount(account.account_type)),
+    () =>
+      accounts.filter(
+        (account) =>
+          (account.status || "").toLowerCase() === "active" &&
+          !isCreditAccount(account.account_type)
+      ),
     [accounts]
   );
 
@@ -48,7 +54,12 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
   }, [accounts, toAccount]);
 
   const destinationAccounts = useMemo(
-    () => accounts.filter((account) => account.account_id !== fromAccount),
+    () =>
+      accounts.filter(
+        (account) =>
+          (account.status || "").toLowerCase() === "active" &&
+          account.account_id !== fromAccount
+      ),
     [accounts, fromAccount]
   );
 
@@ -130,12 +141,12 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
         <p className="mt-2 text-slate-400">
           You need at least one active checking or savings account plus another active account to make a transfer or credit payment.
         </p>
-        <a
+        <Link
           href="/customer/accounts"
           className="mt-5 inline-flex rounded-xl bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300"
         >
           Go to Accounts
-        </a>
+        </Link>
       </div>
     );
   }

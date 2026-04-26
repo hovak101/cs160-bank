@@ -652,19 +652,31 @@ function getScopedTransactionMeta(
         amountPrefix: "+",
       };
     case "deposit":
+    case "atm_deposit":
       return {
         direction: "incoming" as const,
-        title: "Deposit",
-        subtitle: transaction.description || "Deposit completed.",
+        title:
+          normalizedType === "atm_deposit" ? "ATM Deposit" : "Deposit",
+        subtitle:
+          transaction.description ||
+          (normalizedType === "atm_deposit"
+            ? "ATM deposit completed."
+            : "Deposit completed."),
         counterparty: "External source",
         amountPrefix: "+",
       };
     case "withdraw":
     case "withdrawal":
+    case "atm_withdrawal":
       return {
         direction: "outgoing" as const,
-        title: "Withdrawal",
-        subtitle: transaction.description || "Withdrawal completed.",
+        title:
+          normalizedType === "atm_withdrawal" ? "ATM Withdrawal" : "Withdrawal",
+        subtitle:
+          transaction.description ||
+          (normalizedType === "atm_withdrawal"
+            ? "ATM withdrawal completed."
+            : "Withdrawal completed."),
         counterparty: "Cash / external",
         amountPrefix: "-",
       };
@@ -711,8 +723,14 @@ function formatTransactionType(type: string | null) {
       return "Loan Disbursement";
     case "loan_payment":
       return "Loan Payment";
+    case "atm_deposit":
+      return "ATM Deposit";
+    case "atm_withdrawal":
+      return "ATM Withdrawal";
     case "withdrawal":
       return "Withdrawal";
+    case "deposit":
+      return "Deposit";
     case "interest":
       return "Interest Credit";
     default:

@@ -59,6 +59,8 @@ const TIMEFRAMES = [
 const TX_TYPE_LABELS: Record<string, string> = {
   deposit: "Deposits",
   withdrawal: "Withdrawals",
+  atm_deposit: "ATM Deposits",
+  atm_withdrawal: "ATM Withdrawals",
   transfer: "Transfers",
   fee: "Fees",
   interest: "Interest",
@@ -74,6 +76,8 @@ const TX_TYPE_LABELS: Record<string, string> = {
 const TX_TYPE_COLORS: Record<string, string> = {
   deposit: "#34d399",
   withdrawal: "#fbbf24",
+  atm_deposit: "#10b981",
+  atm_withdrawal: "#fb923c",
   transfer: "#22d3ee",
   fee: "#f87171",
   interest: "#a78bfa",

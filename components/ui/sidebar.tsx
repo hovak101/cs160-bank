@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Banknote,
+  CreditCard,
   LayoutDashboard,
   Users,
   ArrowRightLeft,
   Send,
   Settings,
   Landmark,
-  CalendarClock, // Import this
+  CalendarClock,
   HandCoins,
+  Inbox,
+  ScanLine,
   X
 } from "lucide-react";
 
@@ -18,13 +22,73 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
   const pathname = usePathname();
 
   const menuItems = [
-    { name: "Dashboard", icon: LayoutDashboard, href: "/customer/dashboard" },
-    { name: "Accounts", icon: Users, href: "/customer/accounts" },
-    { name: "Transactions", icon: ArrowRightLeft, href: "/customer/transactions" },
-    { name: "Transfers", icon: Send, href: "/customer/transfers" },
-    { name: "Loans", icon: HandCoins, href: "/customer/loans" },
-    { name: "Bill Payments", icon: CalendarClock, href: "/customer/bill-payments" },
-    { name: "Settings", icon: Settings, href: "/customer/settings" },
+    {
+      name: "Dashboard",
+      icon: LayoutDashboard,
+      href: "/customer/dashboard",
+      matchPrefixes: ["/customer/dashboard"],
+      exact: true,
+    },
+    {
+      name: "Accounts",
+      icon: Users,
+      href: "/customer/accounts",
+      matchPrefixes: ["/customer/accounts"],
+    },
+    {
+      name: "ATM",
+      icon: Banknote,
+      href: "/customer/atm",
+      matchPrefixes: ["/customer/atm", "/customer/withdraw", "/customer/dashboard/find-atm"],
+    },
+    {
+      name: "Transfers",
+      icon: Send,
+      href: "/customer/transfers",
+      matchPrefixes: ["/customer/transfers"],
+    },
+    {
+      name: "Transactions",
+      icon: ArrowRightLeft,
+      href: "/customer/transactions",
+      matchPrefixes: ["/customer/transactions"],
+    },
+    {
+      name: "Credit Card",
+      icon: CreditCard,
+      href: "/customer/credit-card",
+      matchPrefixes: ["/customer/credit-card"],
+    },
+    {
+      name: "CashBox",
+      icon: Inbox,
+      href: "/customer/cashbox",
+      matchPrefixes: ["/customer/cashbox"],
+    },
+    {
+      name: "Cheque Deposit",
+      icon: ScanLine,
+      href: "/customer/deposit-cheque",
+      matchPrefixes: ["/customer/deposit-cheque"],
+    },
+    {
+      name: "Loans",
+      icon: HandCoins,
+      href: "/customer/loans",
+      matchPrefixes: ["/customer/loans"],
+    },
+    {
+      name: "Bill Payments",
+      icon: CalendarClock,
+      href: "/customer/bill-payments",
+      matchPrefixes: ["/customer/bill-payments"],
+    },
+    {
+      name: "Settings",
+      icon: Settings,
+      href: "/customer/settings",
+      matchPrefixes: ["/customer/settings"],
+    },
   ];
 
   return (
@@ -45,14 +109,21 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
         </button>
       </div>
 
-      <nav className="flex flex-col gap-1.5 px-4 mt-4">
-        {menuItems.map((item) => (
+      <nav className="mt-4 flex max-h-[calc(100vh-120px)] flex-col gap-1.5 overflow-y-auto px-4 pb-6">
+        {menuItems.map((item) => {
+          const isActive = item.matchPrefixes.some(
+            (prefix) =>
+              pathname === prefix ||
+              (!item.exact && pathname.startsWith(`${prefix}/`))
+          );
+
+          return (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setOpen(false)}
             className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all
-              ${pathname === item.href
+              ${isActive
                   ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
                   : "text-slate-400 hover:bg-white/5 hover:text-slate-100"
               }`}
@@ -60,7 +131,8 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
             <item.icon size={18} />
             <span className="font-medium text-sm">{item.name}</span>
           </Link>
-        ))}
+          );
+        })}
       </nav>
     </aside>
   );

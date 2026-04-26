@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server"; 
 import { requireRole } from "@/lib/auth/require-role";
 
 type TransactionType =
   | "deposit"
   | "withdrawal"
+  | "atm_deposit"
+  | "atm_withdrawal"
   | "transfer"
   | "bill_payment"
   | "cashbox_send"
@@ -17,6 +18,8 @@ type TransactionType =
 const ALLOWED_TRANSACTION_TYPES = [
   "deposit",
   "withdrawal",
+  "atm_deposit",
+  "atm_withdrawal",
   "transfer",
   "bill_payment",
   "cashbox_send",
@@ -78,7 +81,13 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      query = query.eq("transaction_type", transactionType);
+      if (transactionType === "deposit") {
+        query = query.in("transaction_type", ["deposit", "atm_deposit"]);
+      } else if (transactionType === "withdrawal") {
+        query = query.in("transaction_type", ["withdrawal", "atm_withdrawal"]);
+      } else {
+        query = query.eq("transaction_type", transactionType);
+      }
     }
 
     // Filter by reference number if provided

@@ -415,21 +415,34 @@ function getTransactionMeta(
     };
   }
 
-  if (normalizedType === "deposit") {
+  if (normalizedType === "deposit" || normalizedType === "atm_deposit") {
     return {
       direction: "incoming" as const,
-      title: "Deposit",
-      subtitle: tx.description || "Deposit completed",
+      title: normalizedType === "atm_deposit" ? "ATM Deposit" : "Deposit",
+      subtitle:
+        tx.description ||
+        (normalizedType === "atm_deposit"
+          ? "ATM deposit completed"
+          : "Deposit completed"),
       fromLabel: "External Source",
       toLabel: destinationLabel || "Your account",
     };
   }
 
-  if (normalizedType === "withdraw" || normalizedType === "withdrawal") {
+  if (
+    normalizedType === "withdraw" ||
+    normalizedType === "withdrawal" ||
+    normalizedType === "atm_withdrawal"
+  ) {
     return {
       direction: "outgoing" as const,
-      title: "Withdrawal",
-      subtitle: tx.description || "Withdrawal completed",
+      title:
+        normalizedType === "atm_withdrawal" ? "ATM Withdrawal" : "Withdrawal",
+      subtitle:
+        tx.description ||
+        (normalizedType === "atm_withdrawal"
+          ? "ATM withdrawal completed"
+          : "Withdrawal completed"),
       fromLabel: sourceLabel || "Your account",
       toLabel: "External / Cash",
     };
@@ -526,6 +539,10 @@ function formatTransactionType(type: string | null) {
       return "Bill Payment";
     case "deposit":
       return "Deposit";
+    case "atm_deposit":
+      return "ATM Deposit";
+    case "atm_withdrawal":
+      return "ATM Withdrawal";
     case "withdraw":
     case "withdrawal":
       return "Withdrawal";

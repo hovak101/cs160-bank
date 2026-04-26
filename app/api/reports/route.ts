@@ -138,8 +138,9 @@ export async function GET(req: NextRequest) {
       byType[type].count++;
       byType[type].amount += amount;
 
-      if (type === "deposit") totalDeposits += amount;
-      else if (type === "withdrawal") totalWithdrawals += amount;
+      if (type === "deposit" || type === "atm_deposit") totalDeposits += amount;
+      else if (type === "withdrawal" || type === "atm_withdrawal")
+        totalWithdrawals += amount;
       else if (type === "transfer") totalTransfers += amount;
     }
 
