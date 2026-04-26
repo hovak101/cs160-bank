@@ -203,7 +203,7 @@ export function AtmSimulationForm({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Could not find nearby ATMs.");
+        throw new Error(data.error || "Could not find nearby Chase ATMs.");
       }
 
       updateAtmResults(
@@ -214,7 +214,7 @@ export function AtmSimulationForm({
       setAtmLookupError(
         lookupError instanceof Error
           ? lookupError.message
-          : "Could not find nearby ATMs."
+          : "Could not find nearby Chase ATMs."
       );
     } finally {
       setIsSearchingAtms(false);
@@ -250,7 +250,7 @@ export function AtmSimulationForm({
       (position) => {
         void fetchAtmResults(
           `/api/find-atm?lat=${position.coords.latitude}&lng=${position.coords.longitude}`,
-          "No nearby ATMs were found around your current location."
+          "No nearby Chase ATMs were found around your current location."
         );
       },
       () => {
@@ -271,7 +271,7 @@ export function AtmSimulationForm({
     setHasAttemptedNearbySearch(true);
 
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setAtmLookupMessage("Search by address, city, or zip code to choose an ATM.");
+      setAtmLookupMessage("Search by address, city, or zip code to choose a Chase ATM.");
       return;
     }
 
@@ -289,7 +289,7 @@ export function AtmSimulationForm({
             const data = await response.json();
 
             if (!response.ok) {
-              throw new Error(data.error || "Could not find nearby ATMs.");
+              throw new Error(data.error || "Could not find nearby Chase ATMs.");
             }
 
             const results: AtmLocationSelection[] = Array.isArray(data.results)
@@ -299,7 +299,7 @@ export function AtmSimulationForm({
             setAtmResults(results);
             setAtmLookupMessage(
               results.length === 0
-                ? "No nearby ATMs were found around your current location."
+                ? "No nearby Chase ATMs were found around your current location."
                 : ""
             );
             setSelectedAtmId((current) => {
@@ -310,14 +310,14 @@ export function AtmSimulationForm({
               return results[0]?.atm_id || "";
             });
           } catch {
-            setAtmLookupMessage("Search by address, city, or zip code to choose an ATM.");
+            setAtmLookupMessage("Search by address, city, or zip code to choose a Chase ATM.");
           } finally {
             setIsSearchingAtms(false);
           }
         })();
       },
       () => {
-        setAtmLookupMessage("Search by address, city, or zip code to choose an ATM.");
+        setAtmLookupMessage("Search by address, city, or zip code to choose a Chase ATM.");
       },
       { timeout: 5000 }
     );
@@ -472,7 +472,7 @@ export function AtmSimulationForm({
         <div>
           <h2 className="text-xl font-bold text-white">ATM Simulation</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Search for a real ATM location, start a pending ATM withdrawal or
+            Search for a real Chase ATM location, start a pending ATM withdrawal or
             deposit, then click <span className="font-semibold text-white">I finished</span>{" "}
             once the demo ATM action is done.
           </p>
@@ -522,10 +522,10 @@ export function AtmSimulationForm({
 
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-slate-300">Find an ATM</label>
+            <label className="text-sm font-medium text-slate-300">Find a Chase ATM</label>
             <p className="mt-1 text-xs leading-5 text-slate-500">
               Search by address, city, or zip code, or use your current location to
-              pick a real nearby ATM.
+              pick a real nearby Chase ATM.
             </p>
           </div>
 
@@ -547,7 +547,7 @@ export function AtmSimulationForm({
               onClick={() => void handleSearchAtms()}
               className="inline-flex items-center justify-center rounded-xl border border-white/10 px-4 py-3 font-semibold text-white transition hover:border-cyan-400/40"
             >
-              Search ATMs
+              Search Chase ATMs
             </button>
             <button
               type="button"
@@ -560,7 +560,7 @@ export function AtmSimulationForm({
           </div>
 
           {isSearchingAtms ? (
-            <p className="text-sm text-slate-400">Searching for nearby ATMs...</p>
+            <p className="text-sm text-slate-400">Searching for nearby Chase ATMs...</p>
           ) : null}
 
           {atmLookupError ? (
@@ -769,7 +769,7 @@ export function AtmSimulationForm({
             <h3 className="text-lg font-bold text-white">How This Demo Works</h3>
           </div>
           <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
-            <li>1. Find a real ATM by address or current location.</li>
+            <li>1. Find a nearby Chase ATM by address or current location.</li>
             <li>2. Choose an account, action, and amount.</li>
             <li>3. Start a pending ATM transaction in the app.</li>
             <li>4. Click <span className="font-semibold text-white">I finished</span> after the ATM action is done.</li>
@@ -897,7 +897,7 @@ export function AtmSimulationForm({
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-slate-950/50 p-5 text-sm text-slate-400">
-                Search by address or current location to choose an ATM before
+                Search by address or current location to choose a Chase ATM before
                 starting the transaction.
               </div>
             )}

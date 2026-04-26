@@ -38,7 +38,7 @@ const quickActions = [
   },
   {
     title: "ATM",
-    description: "Find a nearby ATM, then start a withdrawal or deposit simulation.",
+    description: "Find a nearby Chase ATM, then start a withdrawal or deposit simulation.",
     href: "/customer/atm?action=withdraw",
     icon: Banknote,
   },

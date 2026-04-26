@@ -79,7 +79,7 @@ export default async function AtmPage({
             ATM Deposit & Withdrawal
           </h1>
           <p className="mt-2 max-w-3xl text-slate-400">
-            Search for a nearby ATM, start a demo ATM transaction, and click{" "}
+            Search for a nearby Chase ATM, start a demo ATM transaction, and click{" "}
             <span className="font-semibold text-white">I finished</span> once the
             ATM step is done to complete the balance update.
           </p>

@@ -33,7 +33,8 @@ export async function GET(request: Request) {
     );
   }
 
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=8000&type=atm&keyword=ATM&key=${apiKey}`;
+  const keyword = encodeURIComponent("Chase ATM");
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=12000&type=atm&keyword=${keyword}&key=${apiKey}`;
 
   const res = await fetch(url);
   const data = await res.json();
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
   }
 
   const results = ((data.results || []) as GooglePlaceResult[])
+    .filter(isChaseAtmResult)
     .slice(0, 10)
     .map((place) => {
       const placeLat = Number(place.geometry?.location?.lat ?? 0);
@@ -53,7 +55,7 @@ export async function GET(request: Request) {
         atm_id:
           place.place_id ||
           `${slugify(place.name || "atm")}-${placeLat.toFixed(5)}-${placeLng.toFixed(5)}`,
-        name: place.name || "ATM",
+        name: place.name || "Chase ATM",
         address: place.vicinity || place.formatted_address || "Address unavailable",
         lat: placeLat,
         lng: placeLng,
@@ -72,6 +74,15 @@ export async function GET(request: Request) {
     }));
 
   return NextResponse.json({ results, location: { lat: Number(lat), lng: Number(lng) } });
+}
+
+function isChaseAtmResult(place: GooglePlaceResult) {
+  const haystack = [place.name, place.vicinity, place.formatted_address]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes("chase");
 }
 
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
