@@ -167,7 +167,7 @@ export default async function AccountsPage() {
                         </p>
                       ) : (
                         <p className="mt-1 text-sm text-slate-400">
-                          Account {maskDigits(account.account_number)}
+                          Account No: {account.account_number}
                         </p>
                       )}
                     </div>
