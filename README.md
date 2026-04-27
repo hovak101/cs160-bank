@@ -1,3 +1,23 @@
+## Submission package (Docker, fully self-hosted)
+
+The whole app — Next.js web + Supabase (Postgres, Auth, REST, Kong gateway, Storage) — boots from one command. No Supabase account required; nothing phones home.
+
+```bash
+cd docker
+cp .env.example .env
+# fill in NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env
+docker compose up --build
+```
+
+Then open <http://localhost:3000>.
+
+- **[Dockerfile](Dockerfile)** — Next.js standalone build for the `web` service.
+- **[docker/](docker/)** — vendored Supabase self-hosting compose + our `web` service. The `db` service auto-applies our schema (`docker/volumes/db/1000-app-schema.sql`) and seed (`docker/volumes/db/1001-app-seed.sql`) on first boot, so the eight test users (`admin@bank.com`, `manager1@bank.com`, `customer1@bank.com`, …, password `Password123!`) exist immediately.
+- **[supabase/migrations/](supabase/migrations/)** + **[supabase/seed.sql](supabase/seed.sql)** — original sources of the schema + seed; the `docker/volumes/db/` copies are kept in sync manually.
+- Hosted (cloud) instance for reference: <https://bank-phi-beryl.vercel.app/>
+
+> First `docker compose up --build` pulls ~5 GB of Supabase images and takes ~3–5 minutes. Subsequent boots are ~30 seconds.
+
 ## Initial Setup
 
 
