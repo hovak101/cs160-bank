@@ -430,7 +430,7 @@ BEGIN
   ) VALUES (
     '7a000000-0000-0000-0000-00000000c301', v_emma_cust, v_emma_chk, 25000.00, 36, 6.75,
     9200.00, 2400.00, 0.00, 'full_time', 'Vehicle purchase',
-    'pending', 88, 'great', 'approve', 'Excellent profile; recommend approval at 6.75% APR.',
+    'pending', 88, 'good', 'approve', 'Excellent profile; recommend approval at 6.75% APR.',
     0.2609, 768.43,
     0.00, 0.00, 0.00, 0.00,
     NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'

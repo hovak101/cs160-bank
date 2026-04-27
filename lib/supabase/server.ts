@@ -10,10 +10,14 @@ import { Database } from "./database.types";
 export async function createClient() {
   const cookieStore = await cookies();
 
+  // SUPABASE_INTERNAL_URL lets the Docker self-host stack point SSR at
+  // http://kong:8000 (compose network) while the browser bundle keeps the
+  // baked-in localhost URL. Falls back to the public URL on Vercel/dev.
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
+      cookieOptions: { name: "sb-vitality-bank-auth-token" },
       cookies: {
         getAll() {
           return cookieStore.getAll();

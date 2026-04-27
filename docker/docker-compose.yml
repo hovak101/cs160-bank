@@ -423,7 +423,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_SUPABASE_URL: http://kong:8000
+      # Browser bundle uses the build-time NEXT_PUBLIC_SUPABASE_URL (localhost:8000).
+      # Next.js inlines NEXT_PUBLIC_* at build time, so the runtime override below
+      # cannot redirect SSR — instead, server.ts/admin.ts/proxy.ts fall back to
+      # SUPABASE_INTERNAL_URL when set, which routes SSR through the compose network.
+      SUPABASE_INTERNAL_URL: http://kong:8000
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
