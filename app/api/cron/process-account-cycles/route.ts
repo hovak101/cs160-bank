@@ -12,7 +12,7 @@ import {
 import { recordBankIncomeTransactions } from "@/lib/banking/bank-income";
 
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.NEXT_PUBLIC_CRON_SECRET;
   if (!cronSecret) {
     return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
   }
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 

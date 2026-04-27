@@ -1972,3 +1972,8 @@ where
     (s."status" = 'completed' and coalesce(t."status", 'pending') <> 'completed')
     or (s."status" = 'failed' and coalesce(t."status", 'pending') <> 'failed')
   );
+
+-- 20260427120000_create_cheques_bucket.sql
+insert into storage.buckets (id, name, public)
+values ('cheques', 'cheques', false)
+on conflict (id) do nothing;
