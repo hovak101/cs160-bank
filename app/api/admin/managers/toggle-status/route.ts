@@ -44,6 +44,22 @@ export async function PATCH(req: NextRequest) {
         throw new Error(error.message);
       }
 
+      // Also flip public.users.is_active so login gate (login-form.tsx)
+      // actually blocks sign-in. Without this, only managers.is_active is set
+      // and the manager can still log in.
+      const { error: userErr } = await supabase
+        .from("users")
+        .update({
+          is_active: false,
+          account_locked_until: null,
+          deactivation_reason: "Deactivated by administrator",
+        })
+        .eq("user_id", data.user_id);
+
+      if (userErr) {
+        throw new Error(userErr.message);
+      }
+
       return NextResponse.json({ data });
     }
 
@@ -65,6 +81,19 @@ export async function PATCH(req: NextRequest) {
 
       if (error) {
         throw new Error(error.message);
+      }
+
+      const { error: userErr } = await supabase
+        .from("users")
+        .update({
+          is_active: true,
+          account_locked_until: null,
+          deactivation_reason: null,
+        })
+        .eq("user_id", data.user_id);
+
+      if (userErr) {
+        throw new Error(userErr.message);
       }
 
       return NextResponse.json({ data });

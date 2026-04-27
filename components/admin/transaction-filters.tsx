@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 export interface TransactionFilters {
@@ -38,6 +38,27 @@ export function TransactionFilters({
   const [transactionType, setTransactionType] = useState(initialFilters?.transactionType || "");
   const [transactionStatus, setTransactionStatus] = useState(initialFilters?.transactionStatus || "");
   const [cashboxOnly, setCashboxOnly] = useState(initialFilters?.cashboxOnly || false);
+
+  // Keep internal state in sync when the parent resets/updates initialFilters
+  // (e.g. the page-level Clear button), so hasActiveFilters reflects reality.
+  useEffect(() => {
+    setDateSort(initialFilters?.dateSort || "desc");
+    setSpecificDate(initialFilters?.specificDate || "");
+    setMinAmount(initialFilters?.minAmountDisplay ?? minAmountThreshold);
+    setMaxAmount(initialFilters?.maxAmount ? String(initialFilters.maxAmount) : "");
+    setTransactionType(initialFilters?.transactionType || "");
+    setTransactionStatus(initialFilters?.transactionStatus || "");
+    setCashboxOnly(initialFilters?.cashboxOnly || false);
+  }, [
+    initialFilters?.dateSort,
+    initialFilters?.specificDate,
+    initialFilters?.minAmountDisplay,
+    initialFilters?.maxAmount,
+    initialFilters?.transactionType,
+    initialFilters?.transactionStatus,
+    initialFilters?.cashboxOnly,
+    minAmountThreshold,
+  ]);
 
   const handleApplyFilters = () => {
     const filters: TransactionFilters = {

@@ -61,6 +61,10 @@ function getRoleBadgeClass(role: string | null) {
     return "border border-cyan-500/30 bg-cyan-500/15 text-cyan-300";
   }
 
+  if (value === "manager") {
+    return "border border-violet-500/30 bg-violet-500/15 text-violet-300";
+  }
+
   return "border border-slate-500/30 bg-slate-500/15 text-slate-300";
 }
 

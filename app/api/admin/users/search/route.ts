@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
         created_at,
         deactivation_reason
       `)
-      .eq("role", "customer")
+      .in("role", ["customer", "manager"])
       .order("created_at", { ascending: false });
 
     if (q) {
