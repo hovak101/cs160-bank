@@ -6,9 +6,9 @@ import { timingSafeEqual } from "crypto";
 // it finds all payments that are due and processes them
 // (deduct from payer, credit payee — both are internal accounts).
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET ?? process.env.NEXT_PUBLIC_CRON_SECRET;
+  const cronSecret = process.env.NEXT_PUBLIC_CRON_SECRET;
   if (!cronSecret) {
-    return NextResponse.json({ error: "Server misconfigured: no CRON_SECRET set" }, { status: 500 });
+    return NextResponse.json({ error: "Server misconfigured: no NEXT_PUBLIC_CRON_SECRET set" }, { status: 500 });
   }
 
   const authHeader = request.headers.get("authorization") ?? "";
@@ -20,17 +20,21 @@ export async function POST(request: Request) {
   }
 
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   const today = new Date().toISOString().split("T")[0];
 
-  const { data: dueSchedules } = await supabase
+  const { data: dueSchedules, error: fetchError } = await supabase
     .from("bill_schedules")
     .select("*")
     .eq("status", "active")
     .lte("next_payment_date", today);
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
 
   if (!dueSchedules || dueSchedules.length === 0) {
     return NextResponse.json({ message: "No payments due today" });
