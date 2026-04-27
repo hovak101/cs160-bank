@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,16 @@ export async function POST(request: Request) {
     if ((targetAccount.status ?? "").toLowerCase() !== "active") {
       return NextResponse.json(
         { error: "Only active accounts can receive CashBox funds." },
+        { status: 400 }
+      );
+    }
+
+    if (!isDepositEligible(targetAccount.account_type)) {
+      return NextResponse.json(
+        {
+          error:
+            "CashBox can only move money into checking or savings accounts.",
+        },
         { status: 400 }
       );
     }

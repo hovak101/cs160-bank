@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -9,6 +10,11 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
+import {
+  getAccountTypeLabel,
+  isCreditAccount,
+  isSavingsAccount,
+} from "@/lib/banking/rules";
 
 type Account = {
   account_id: string;
@@ -29,6 +35,16 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  const sourceAccounts = useMemo(
+    () =>
+      accounts.filter(
+        (account) =>
+          (account.status || "").toLowerCase() === "active" &&
+          !isCreditAccount(account.account_type)
+      ),
+    [accounts]
+  );
+
   const fromAccountData = useMemo(() => {
     return accounts.find((account) => account.account_id === fromAccount);
   }, [accounts, fromAccount]);
@@ -37,8 +53,20 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
     return accounts.find((account) => account.account_id === toAccount);
   }, [accounts, toAccount]);
 
+  const destinationAccounts = useMemo(
+    () =>
+      accounts.filter(
+        (account) =>
+          (account.status || "").toLowerCase() === "active" &&
+          account.account_id !== fromAccount
+      ),
+    [accounts, fromAccount]
+  );
+
   const availableBalance = Number(fromAccountData?.balance ?? 0);
   const currency = fromAccountData?.currency ?? "USD";
+  const isCreditPayment =
+    !!toAccountData && isCreditAccount(toAccountData.account_type);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,28 +121,32 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
 
         setAmount("");
         router.refresh();
-        setMessage("Transfer completed successfully.");
+        setMessage(
+          isCreditPayment
+            ? "Credit card payment completed successfully."
+            : "Transfer completed successfully."
+        );
       } catch {
         setError("Something went wrong while processing the transfer.");
       }
     });
   };
 
-  if (accounts.length < 2) {
+  if (sourceAccounts.length === 0 || accounts.length < 2) {
     return (
       <div className="rounded-3xl border border-dashed border-white/10 bg-[#0f172a] p-8 text-center">
         <h2 className="text-2xl font-bold text-white">
-          Not enough accounts
+          Not enough eligible accounts
         </h2>
         <p className="mt-2 text-slate-400">
-          You need at least two active accounts to make a transfer.
+          You need at least one active checking or savings account plus another active account to make a transfer or credit payment.
         </p>
-        <a
+        <Link
           href="/customer/accounts"
           className="mt-5 inline-flex rounded-xl bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300"
         >
           Go to Accounts
-        </a>
+        </Link>
       </div>
     );
   }
@@ -128,7 +160,7 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
         <div>
           <h2 className="text-xl font-bold text-white">Transfer Details</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Select source and destination accounts, then enter the amount.
+            Move money between deposit accounts or pay your credit card from checking or savings.
           </p>
         </div>
 
@@ -148,9 +180,9 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
             className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
           >
             <option value="">Choose source account</option>
-            {accounts.map((account) => (
+            {sourceAccounts.map((account) => (
               <option key={account.account_id} value={account.account_id}>
-                {account.account_name} • {account.account_type} • ****
+                {account.account_name} • {getAccountTypeLabel(account.account_type)} • ****
                 {account.account_number?.slice(-4)}
               </option>
             ))}
@@ -171,14 +203,12 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
             className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-400"
           >
             <option value="">Choose destination account</option>
-            {accounts
-              .filter((account) => account.account_id !== fromAccount)
-              .map((account) => (
-                <option key={account.account_id} value={account.account_id}>
-                  {account.account_name} • {account.account_type} • ****
-                  {account.account_number?.slice(-4)}
-                </option>
-              ))}
+            {destinationAccounts.map((account) => (
+              <option key={account.account_id} value={account.account_id}>
+                {account.account_name} • {getAccountTypeLabel(account.account_type)} • ****
+                {account.account_number?.slice(-4)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -209,6 +239,11 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
               Account: {fromAccountData.account_name} • ****
               {fromAccountData.account_number?.slice(-4)}
             </p>
+            {isSavingsAccount(fromAccountData.account_type) ? (
+              <p className="mt-2 text-xs text-amber-300">
+                Savings transfers count toward your 10% monthly withdrawal allowance.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -236,6 +271,8 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
               <Loader2 size={18} className="mr-2 animate-spin" />
               Processing...
             </>
+          ) : isCreditPayment ? (
+            "Pay Credit Card"
           ) : (
             "Transfer Money"
           )}
@@ -264,6 +301,11 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
                 : "No account selected"}
             </p>
 
+            <p className="mt-4 text-sm text-slate-400">Transfer Type</p>
+            <p className="mt-1 text-base font-semibold text-white">
+              {isCreditPayment ? "Credit Card Payment" : "Internal Transfer"}
+            </p>
+
             <p className="mt-4 text-sm text-slate-400">Transfer Amount</p>
             <p className="mt-1 text-base font-semibold text-white">
               {amount && Number(amount) > 0
@@ -281,13 +323,15 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
                 : formatCurrency(0, currency)}
             </p>
 
-            <p className="mt-4 text-sm text-slate-400">Destination New Balance</p>
+            <p className="mt-4 text-sm text-slate-400">Destination Result</p>
             <p className="mt-1 text-base font-semibold text-white">
-              {toAccountData
+              {toAccountData && !isCreditPayment
                 ? formatCurrency(
                     Number(toAccountData.balance || 0) + Number(amount || 0),
                     toAccountData.currency ?? "USD"
                   )
+                : isCreditPayment
+                ? "Applies directly toward the card balance"
                 : formatCurrency(0, currency)}
             </p>
           </div>
@@ -299,9 +343,7 @@ export function TransferForm({ accounts }: { accounts: Account[] }) {
             <h3 className="text-lg font-bold text-white">Important Note</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            For this demo, transfers between your accounts are processed
-            instantly. The system will reject any amount greater than the source
-            account balance.
+            Checking and savings accounts can send transfers instantly. Sending money to a credit card is treated as a card payment, while credit cards themselves cannot be used as the source of a transfer.
           </p>
         </div>
       </div>

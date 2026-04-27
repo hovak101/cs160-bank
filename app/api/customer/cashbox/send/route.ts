@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { isDepositEligible, isSavingsAccount } from "@/lib/banking/rules";
+import {
+  getOrCreateSavingsMonthlyActivity,
+  getRemainingSavingsWithdrawalAllowance,
+} from "@/lib/banking/server";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
 
     const { data: sourceAccount, error: sourceAccountError } = await supabaseAdmin
       .from("accounts")
-      .select("account_id, customer_id, balance, currency, status, account_name, account_number")
+      .select("account_id, customer_id, account_type, balance, currency, status, account_name, account_number")
       .eq("account_id", source_account_id)
       .eq("customer_id", senderCustomer.customer_id)
       .single();
@@ -64,8 +69,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only active accounts can send money." }, { status: 400 });
     }
 
+    if (!isDepositEligible(sourceAccount.account_type)) {
+      return NextResponse.json(
+        {
+          error:
+            "Only checking and savings accounts can fund CashBox sends. Credit cards should be paid through transfers instead.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (Number(sourceAccount.balance ?? 0) < amount) {
       return NextResponse.json({ error: "Insufficient balance." }, { status: 400 });
+    }
+
+    let savingsMonthlyActivity:
+      | Awaited<ReturnType<typeof getOrCreateSavingsMonthlyActivity>>
+      | null = null;
+
+    if (isSavingsAccount(sourceAccount.account_type)) {
+      savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
+        supabaseAdmin as any,
+        sourceAccount.account_id,
+        Number(sourceAccount.balance ?? 0)
+      );
+      const remainingAllowance =
+        getRemainingSavingsWithdrawalAllowance(savingsMonthlyActivity);
+
+      if (amount > remainingAllowance) {
+        return NextResponse.json(
+          {
+            error: `Savings transfer exceeds your monthly 10% withdrawal allowance. Remaining allowance: $${remainingAllowance.toFixed(
+              2
+            )}.`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const { data: receiverCustomer, error: receiverCustomerError } = await supabaseAdmin
@@ -125,6 +165,25 @@ export async function POST(request: Request) {
 
     if (updateSourceError) {
       return NextResponse.json({ error: "Failed to deduct sender account balance." }, { status: 500 });
+    }
+
+    if (savingsMonthlyActivity) {
+      const { error: activityError } = await supabaseAdmin
+        .from("savings_monthly_activity")
+        .update({
+          withdrawn_amount:
+            Number(savingsMonthlyActivity.withdrawn_amount || 0) + amount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("account_id", sourceAccount.account_id)
+        .eq("month_key", savingsMonthlyActivity.month_key);
+
+      if (activityError) {
+        return NextResponse.json(
+          { error: activityError.message || "Failed to track savings CashBox send." },
+          { status: 500 }
+        );
+      }
     }
 
     const { error: updateCashboxError } = await supabaseAdmin

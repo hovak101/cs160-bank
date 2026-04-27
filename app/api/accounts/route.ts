@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { buildCreditCardSeed, getCustomerDisplayName } from "@/lib/banking/server";
+import { getDefaultCreditTerms } from "@/lib/banking/rules";
+import { hashSecurityCode } from "@/lib/banking/security-code.server";
+import {
+  isValidSecurityCodeFormat,
+  normalizeSecurityCode,
+} from "@/lib/banking/security-code";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +30,11 @@ export async function POST(request: Request) {
     
     const body = await request.json();
     const { currency, account_name, account_type } = body;
+    const securityCode = normalizeSecurityCode(body.security_code);
 
     const { data: customer, error: customerError } = await supabase
         .from("customers")
-        .select("customer_id")
+        .select("customer_id, first_name, last_name")
         .eq("user_id", user.id)
         .single();
         
@@ -42,10 +50,17 @@ export async function POST(request: Request) {
         return "checking";
     })();
 
+    if (dbAccountType === "credit" && !isValidSecurityCodeFormat(securityCode)) {
+      return NextResponse.json(
+        { error: "Credit cards require a valid 3-digit security code." },
+        { status: 400 }
+      );
+    }
+
     let account_number: string;
     try {
         account_number = await generateUniqueAccountNumber(supabase);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to generate account number" }, { status: 500 });
     }   
     const { data: newAccount, error: createError } = await supabase
@@ -66,10 +81,54 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: createError.message }, { status: 500 });
     }
 
+    if (dbAccountType === "credit") {
+      const creditTerms = getDefaultCreditTerms();
+      const securityCodeHash = hashSecurityCode(securityCode);
+      const securityCodeUpdatedAt = new Date().toISOString();
+
+        const { error: creditAccountError } = await supabase
+          .from("credit_accounts")
+          .insert({
+            account_id: newAccount.account_id,
+            ...creditTerms,
+          });
+
+        if (creditAccountError) {
+          await supabase.from("accounts").delete().eq("account_id", newAccount.account_id);
+          return NextResponse.json(
+            { error: creditAccountError.message || "Failed to create credit account details." },
+            { status: 500 }
+          );
+        }
+
+        const cardholderName = getCustomerDisplayName(customer);
+        const { error: creditCardError } = await supabase
+          .from("credit_cards")
+          .insert({
+            account_id: newAccount.account_id,
+            ...buildCreditCardSeed(cardholderName, {
+              security_code_hash: securityCodeHash,
+              security_code_last_updated_at: securityCodeUpdatedAt,
+              security_code_mode: "user_set",
+            }),
+          });
+
+        if (creditCardError) {
+          await supabase.from("credit_accounts").delete().eq("account_id", newAccount.account_id);
+          await supabase.from("accounts").delete().eq("account_id", newAccount.account_id);
+          return NextResponse.json(
+            { error: creditCardError.message || "Failed to issue credit card." },
+            { status: 500 }
+          );
+        }
+    }
+
     return NextResponse.json(newAccount, { status: 201 });    
 }
 
-async function generateUniqueAccountNumber(supabase: any): Promise<string> {
+type AppSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+async function generateUniqueAccountNumber(supabase: AppSupabaseClient): Promise<string> {
   let attempts = 0;
   while(attempts < 10) {
     const candidate = Math.floor(1000000000 + Math.random() * 9000000000).toString();

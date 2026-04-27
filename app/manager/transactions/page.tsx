@@ -54,10 +54,10 @@ function formatDateTime(value: string | null) {
 function getTransactionTypeBadgeClass(type: string | null) {
   const value = (type || "").toLowerCase();
 
-  if (value === "deposit") {
+  if (value === "deposit" || value === "atm_deposit") {
     return "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300";
   }
-  if (value === "withdrawal") {
+  if (value === "withdrawal" || value === "atm_withdrawal") {
     return "border border-orange-500/30 bg-orange-500/15 text-orange-300";
   }
   if (value === "transfer") {

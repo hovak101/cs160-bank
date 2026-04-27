@@ -1,6 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server"; 
 import { requireRole } from "@/lib/auth/require-role";
+
+type TransactionType =
+  | "deposit"
+  | "withdrawal"
+  | "atm_deposit"
+  | "atm_withdrawal"
+  | "transfer"
+  | "bill_payment"
+  | "cashbox_send"
+  | "cashbox_withdraw"
+  | "credit_purchase"
+  | "credit_payment"
+  | "fee"
+  | "interest";
+
+const ALLOWED_TRANSACTION_TYPES = [
+  "deposit",
+  "withdrawal",
+  "atm_deposit",
+  "atm_withdrawal",
+  "transfer",
+  "bill_payment",
+  "cashbox_send",
+  "cashbox_withdraw",
+  "credit_purchase",
+  "credit_payment",
+  "fee",
+  "interest",
+] as const satisfies readonly TransactionType[];
+
+function isTransactionType(value: string): value is TransactionType {
+  return (ALLOWED_TRANSACTION_TYPES as readonly string[]).includes(value);
+}
 
 type TransactionItem = {
   transaction_id: string;
@@ -42,7 +74,20 @@ export async function GET(req: NextRequest) {
 
     // Filter by transaction type if specified (deposits, withdrawals)
     if (transactionType && transactionType !== "all") {
-      query = query.eq("transaction_type", transactionType);
+      if (!isTransactionType(transactionType)) {
+        return NextResponse.json(
+          { error: "Invalid transaction type." },
+          { status: 400 }
+        );
+      }
+
+      if (transactionType === "deposit") {
+        query = query.in("transaction_type", ["deposit", "atm_deposit"]);
+      } else if (transactionType === "withdrawal") {
+        query = query.in("transaction_type", ["withdrawal", "atm_withdrawal"]);
+      } else {
+        query = query.eq("transaction_type", transactionType);
+      }
     }
 
     // Filter by reference number if provided

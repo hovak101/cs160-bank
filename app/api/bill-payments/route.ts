@@ -86,7 +86,7 @@ export async function POST(request: Request) {
 
   const { data: sourceAccount } = await supabase
     .from("accounts")
-    .select("account_id, status")
+    .select("account_id, account_type, status")
     .eq("account_id", account_id)
     .eq("customer_id", customerData!.customer_id)
     .single();

@@ -86,6 +86,79 @@ export type Database = {
           },
         ]
       }
+      atm_simulations: {
+        Row: {
+          account_id: string
+          action: string
+          amount: number
+          atm_id: string
+          atm_location: string
+          atm_name: string
+          atm_simulation_id: string
+          completed_at: string | null
+          created_at: string
+          customer_id: string
+          status: string
+          transaction_id: string
+          updated_at: string
+          verification_code: string | null
+        }
+        Insert: {
+          account_id: string
+          action: string
+          amount: number
+          atm_id: string
+          atm_location: string
+          atm_name: string
+          atm_simulation_id?: string
+          completed_at?: string | null
+          created_at?: string
+          customer_id: string
+          status?: string
+          transaction_id: string
+          updated_at?: string
+          verification_code?: string | null
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          amount?: number
+          atm_id?: string
+          atm_location?: string
+          atm_name?: string
+          atm_simulation_id?: string
+          completed_at?: string | null
+          created_at?: string
+          customer_id?: string
+          status?: string
+          transaction_id?: string
+          updated_at?: string
+          verification_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atm_simulations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "atm_simulations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "atm_simulations_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "transactions"
+            referencedColumns: ["transaction_id"]
+          },
+        ]
+      }
       bank_income: {
         Row: {
           amount: number
@@ -341,6 +414,9 @@ export type Database = {
           exp_year: number
           rewards_program: string
           rewards_rate: number
+          security_code_hash: string
+          security_code_last_updated_at: string
+          security_code_mode: string
           updated_at: string
         }
         Insert: {
@@ -355,6 +431,9 @@ export type Database = {
           exp_year: number
           rewards_program?: string
           rewards_rate?: number
+          security_code_hash: string
+          security_code_last_updated_at?: string
+          security_code_mode?: string
           updated_at?: string
         }
         Update: {
@@ -369,6 +448,9 @@ export type Database = {
           exp_year?: number
           rewards_program?: string
           rewards_rate?: number
+          security_code_hash?: string
+          security_code_last_updated_at?: string
+          security_code_mode?: string
           updated_at?: string
         }
         Relationships: [
@@ -646,6 +728,74 @@ export type Database = {
           },
         ]
       }
+      plaid_linked_accounts: {
+        Row: {
+          access_token_auth_tag: string
+          access_token_iv: string
+          created_at: string
+          customer_id: string
+          encrypted_access_token: string
+          institution_name: string | null
+          last_verified_at: string | null
+          linked_account_id: string
+          plaid_account_id: string
+          plaid_account_mask: string | null
+          plaid_account_name: string
+          plaid_account_official_name: string | null
+          plaid_account_subtype: string | null
+          plaid_account_type: string | null
+          plaid_item_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          access_token_auth_tag: string
+          access_token_iv: string
+          created_at?: string
+          customer_id: string
+          encrypted_access_token: string
+          institution_name?: string | null
+          last_verified_at?: string | null
+          linked_account_id?: string
+          plaid_account_id: string
+          plaid_account_mask?: string | null
+          plaid_account_name: string
+          plaid_account_official_name?: string | null
+          plaid_account_subtype?: string | null
+          plaid_account_type?: string | null
+          plaid_item_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          access_token_auth_tag?: string
+          access_token_iv?: string
+          created_at?: string
+          customer_id?: string
+          encrypted_access_token?: string
+          institution_name?: string | null
+          last_verified_at?: string | null
+          linked_account_id?: string
+          plaid_account_id?: string
+          plaid_account_mask?: string | null
+          plaid_account_name?: string
+          plaid_account_official_name?: string | null
+          plaid_account_subtype?: string | null
+          plaid_account_type?: string | null
+          plaid_item_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plaid_linked_accounts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
       savings_monthly_activity: {
         Row: {
           account_id: string
@@ -814,6 +964,8 @@ export type Database = {
         | "transfer"
         | "fee"
         | "interest"
+        | "atm_withdrawal"
+        | "atm_deposit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -969,6 +1121,8 @@ export const Constants = {
         "transfer",
         "fee",
         "interest",
+        "atm_withdrawal",
+        "atm_deposit",
       ],
     },
   },

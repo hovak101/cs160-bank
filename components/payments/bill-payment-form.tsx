@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { isCheckingAccount } from "@/lib/banking/rules";
 
 type Account = {
   account_id: string;
   account_name: string;
   account_number: string;
+  account_type?: string;
 };
 
 export function BillPaymentForm() {
@@ -37,10 +39,10 @@ export function BillPaymentForm() {
         if (customer) {
           const { data: accountsData } = await supabase
             .from("accounts")
-            .select("account_id, account_name, account_number")
+            .select("account_id, account_name, account_number, account_type")
             .eq("customer_id", customer.customer_id);
-
-          setAccounts(accountsData || []);
+          
+          setAccounts((accountsData || []).filter((account) => isCheckingAccount(account.account_type)));
         }
       } catch (error) {
         console.error("Error fetching accounts:", error);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/require-role";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type UpdateAccountStatusBody = {
   account_id?: string;
@@ -8,11 +9,14 @@ type UpdateAccountStatusBody = {
 
 const ALLOWED_STATUSES = new Set(["active", "frozen", "closed"]);
 
+function mapAccountStatusToCardStatus(status: string) {
+  return status === "active" ? "active" : "locked";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireRole(["admin", "manager"]);
     if (!auth.ok) return auth.response;
-    const { supabase } = auth;
     const body = (await req.json()) as UpdateAccountStatusBody;
 
     const accountId = body.account_id?.trim();
@@ -32,9 +36,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data: account, error: fetchError } = await supabase
+    const { data: account, error: fetchError } = await supabaseAdmin
       .from("accounts")
-      .select("account_id, status, balance")
+      .select("account_id, account_type, status, balance")
       .eq("account_id", accountId)
       .maybeSingle();
 
@@ -61,18 +65,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (status === "closed" && Number(account.balance || 0) > 0) {
-      return NextResponse.json(
-        { error: "Account balance must be 0 before closing the account." },
-        { status: 400 }
-      );
+    if (status === "closed") {
+      if (account.account_type === "credit") {
+          const { data: creditAccount } = await supabaseAdmin
+          .from("credit_accounts")
+          .select("current_balance")
+          .eq("account_id", accountId)
+          .maybeSingle();
+
+        if (Number(creditAccount?.current_balance || 0) > 0) {
+          return NextResponse.json(
+            { error: "Credit card balance must be paid off before closing the account." },
+            { status: 400 }
+          );
+        }
+      } else if (Number(account.balance || 0) > 0) {
+        return NextResponse.json(
+          { error: "Account balance must be 0 before closing the account." },
+          { status: 400 }
+        );
+      }
     }
 
-    const { data: updatedRows, error: updateError } = await supabase
+    const updatedAt = new Date().toISOString();
+
+    const { data: updatedRows, error: updateError } = await supabaseAdmin
       .from("accounts")
       .update({
         status: status as "active" | "frozen" | "closed",
-        updated_at: new Date().toISOString(),
+        updated_at: updatedAt,
       })
       .eq("account_id", accountId)
       .select("account_id, status, updated_at");
@@ -92,6 +113,27 @@ export async function POST(req: NextRequest) {
         },
         { status: 403 }
       );
+    }
+
+    if (account.account_type === "credit") {
+      const { error: creditCardStatusError } = await supabaseAdmin
+        .from("credit_cards")
+        .update({
+          card_status: mapAccountStatusToCardStatus(status),
+          updated_at: updatedAt,
+        })
+        .eq("account_id", accountId);
+
+      if (creditCardStatusError) {
+        return NextResponse.json(
+          {
+            error:
+              creditCardStatusError.message ||
+              "Account status was updated, but credit card status sync failed.",
+          },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({
