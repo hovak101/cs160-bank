@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     const firstName = body.first_name?.trim() || "";
     const lastName = body.last_name?.trim() || "";
-    const phoneNumber = body.phone_number?.trim() || null;
+    const phoneNumber = body.phone_number?.replace(/\D/g, "").trim() || null;
     const taxId = body.tax_id?.trim() || null;
     const country = body.country?.trim() || null;
     const addressLine1 = body.address_line_1?.trim() || null;
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     const { data: existingCustomer, error: customerCheckError } = await supabase
       .from("customers")
-      .select("customer_id")
+      .select("customer_id, user_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -51,6 +51,64 @@ export async function POST(request: Request) {
         { error: customerCheckError.message },
         { status: 500 }
       );
+    }
+
+    // Check whether phone number already belongs to someone else
+    if (phoneNumber) {
+      let phoneQuery = supabase
+        .from("customers")
+        .select("customer_id, user_id")
+        .eq("phone_number", phoneNumber)
+        .limit(1);
+
+      if (existingCustomer) {
+        phoneQuery = phoneQuery.neq("user_id", user.id);
+      }
+
+      const { data: phoneMatch, error: phoneError } = await phoneQuery.maybeSingle();
+
+      if (phoneMatch) {
+        return NextResponse.json(
+          { field: "phoneNumber", error: "Phone number already exists." },
+          { status: 409 }
+        );
+      }
+      else if (phoneError) {
+        console.error("Phone duplicate check error:", phoneError);
+        return NextResponse.json(
+          { error: "Failed to validate phone number." },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Check whether tax ID already belongs to someone else
+    if (taxId) {
+      let taxQuery = supabase
+        .from("customers")
+        .select("customer_id, user_id")
+        .eq("tax_id", taxId)
+        .limit(1);
+
+      if (existingCustomer) {
+        taxQuery = taxQuery.neq("user_id", user.id);
+      }
+
+      const { data: taxMatch, error: taxError } = await taxQuery.maybeSingle();
+
+      if (taxMatch) {
+        return NextResponse.json(
+          { field: "taxId", error: "Tax ID already exists." },
+          { status: 409 }
+        );
+      }
+      else if (taxError) {
+        console.error("Tax ID duplicate check error:", taxError);
+        return NextResponse.json(
+          { error: "Failed to validate tax ID." },
+          { status: 500 }
+        );
+      }
     }
 
     if (existingCustomer) {

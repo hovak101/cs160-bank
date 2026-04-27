@@ -147,7 +147,7 @@ export function OnboardingForm() {
 
     setErrors({});
     setLoading(true);
-
+    
     try {
       const res = await fetch("/api/customer/profile", {
         method: "POST",
@@ -217,7 +217,7 @@ export function OnboardingForm() {
             placeholder="Last Name"
             className={inputClass(errors.lastName)}
             value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
+            onChange  ={(e) => setLastName(e.target.value)}
             required
           />
           {errors.lastName && (
