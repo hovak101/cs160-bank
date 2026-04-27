@@ -1748,3 +1748,227 @@ using (((bucket_id = 'cheques'::text) AND (((storage.foldername(name))[1] = ( SE
 
 
 
+
+
+-- ============================================================================
+-- Post-snapshot migrations (appended for the Docker self-host bundle).
+-- These run after the remote_schema dump above so the local Postgres has
+-- the same final state as the cloud DB.
+-- ============================================================================
+
+
+-- ----- 20260424130000_add_plaid_linked_accounts.sql -----
+create table if not exists "public"."plaid_linked_accounts" (
+  "linked_account_id" uuid primary key default gen_random_uuid(),
+  "customer_id" uuid not null references "public"."customers"("customer_id") on delete cascade,
+  "plaid_item_id" text not null,
+  "plaid_account_id" text not null,
+  "encrypted_access_token" text not null,
+  "access_token_iv" text not null,
+  "access_token_auth_tag" text not null,
+  "institution_name" text,
+  "plaid_account_name" text not null,
+  "plaid_account_official_name" text,
+  "plaid_account_mask" text,
+  "plaid_account_type" text,
+  "plaid_account_subtype" text,
+  "status" text not null default 'active',
+  "last_verified_at" timestamp with time zone default now(),
+  "created_at" timestamp with time zone not null default now(),
+  "updated_at" timestamp with time zone not null default now(),
+  constraint "plaid_linked_accounts_status_check" check (
+    "status" in ('active', 'disconnected')
+  ),
+  constraint "plaid_linked_accounts_customer_plaid_account_key" unique ("customer_id", "plaid_account_id")
+);
+
+create index if not exists "plaid_linked_accounts_customer_id_idx"
+  on "public"."plaid_linked_accounts" ("customer_id");
+
+create index if not exists "plaid_linked_accounts_customer_status_idx"
+  on "public"."plaid_linked_accounts" ("customer_id", "status");
+
+alter table "public"."plaid_linked_accounts" enable row level security;
+
+grant all on table "public"."plaid_linked_accounts" to "service_role";
+
+-- ----- 20260424174500_reapply_credit_card_security_code_columns.sql -----
+create extension if not exists pgcrypto;
+
+alter table "public"."credit_cards"
+  add column if not exists "security_code_hash" text,
+  add column if not exists "security_code_last_updated_at" timestamp without time zone default now(),
+  add column if not exists "security_code_mode" character varying(20) not null default 'user_set';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'credit_cards_security_code_mode_check'
+  ) then
+    alter table "public"."credit_cards"
+      add constraint "credit_cards_security_code_mode_check"
+      check (
+        (security_code_mode)::text = any (
+          (array['user_set'::character varying, 'legacy_demo'::character varying])::text[]
+        )
+      );
+  end if;
+end
+$$;
+
+-- ----- 20260425093000_add_atm_simulations.sql -----
+create extension if not exists pgcrypto;
+
+create table if not exists "public"."atm_simulations" (
+  "atm_simulation_id" uuid primary key default gen_random_uuid(),
+  "customer_id" uuid not null references "public"."customers"("customer_id") on delete cascade,
+  "account_id" uuid not null references "public"."accounts"("account_id") on delete cascade,
+  "transaction_id" uuid not null unique references "public"."transactions"("transaction_id") on delete cascade,
+  "atm_id" text not null,
+  "atm_name" text not null,
+  "atm_location" text not null,
+  "action" character varying not null,
+  "amount" numeric(15,2) not null,
+  "verification_code" character varying(16),
+  "status" character varying not null default 'pending',
+  "created_at" timestamp with time zone not null default now(),
+  "completed_at" timestamp with time zone,
+  "updated_at" timestamp with time zone not null default now(),
+  constraint "atm_simulations_action_check" check ((action)::text = any ((array['withdraw'::character varying, 'deposit'::character varying])::text[])),
+  constraint "atm_simulations_amount_check" check (amount > (0)::numeric),
+  constraint "atm_simulations_status_check" check ((status)::text = any ((array['pending'::character varying, 'completed'::character varying, 'failed'::character varying])::text[]))
+);
+
+create index if not exists "atm_simulations_customer_status_idx"
+  on "public"."atm_simulations" ("customer_id", "status", "created_at" desc);
+
+create index if not exists "atm_simulations_account_status_idx"
+  on "public"."atm_simulations" ("account_id", "status", "created_at" desc);
+
+create unique index if not exists "atm_simulations_verification_code_key"
+  on "public"."atm_simulations" ("verification_code")
+  where "verification_code" is not null;
+
+alter table "public"."atm_simulations" enable row level security;
+
+create policy "Customers can read own ATM simulations"
+on "public"."atm_simulations"
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from "public"."customers" c
+    where c."customer_id" = "atm_simulations"."customer_id"
+      and c."user_id" = auth.uid()
+  )
+);
+
+create policy "Customers can insert own ATM simulations"
+on "public"."atm_simulations"
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from "public"."customers" c
+    where c."customer_id" = "atm_simulations"."customer_id"
+      and c."user_id" = auth.uid()
+  )
+);
+
+create policy "Customers can update own ATM simulations"
+on "public"."atm_simulations"
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from "public"."customers" c
+    where c."customer_id" = "atm_simulations"."customer_id"
+      and c."user_id" = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1
+    from "public"."customers" c
+    where c."customer_id" = "atm_simulations"."customer_id"
+      and c."user_id" = auth.uid()
+  )
+);
+
+alter table "public"."transactions" drop constraint if exists "transactions_transaction_type_check";
+
+alter table "public"."transactions" add constraint "transactions_transaction_type_check"
+check (
+  (("transaction_type")::text = any (
+    (
+      array[
+        'deposit'::character varying,
+        'withdrawal'::character varying,
+        'transfer'::character varying,
+        'fee'::character varying,
+        'interest'::character varying,
+        'bill_payment'::character varying,
+        'cashbox_send'::character varying,
+        'cashbox_withdraw'::character varying,
+        'credit_purchase'::character varying,
+        'loan_payment'::character varying,
+        'credit_payment'::character varying,
+        'loan_disbursement'::character varying,
+        'atm_withdrawal'::character varying,
+        'atm_deposit'::character varying
+      ]
+    )::text[]
+  ))
+) not valid;
+
+alter table "public"."transactions" validate constraint "transactions_transaction_type_check";
+
+-- ----- 20260425124500_fix_atm_transaction_updates.sql -----
+drop policy if exists "Allow authenticated update transactions"
+on "public"."transactions";
+
+create policy "Allow authenticated update transactions"
+on "public"."transactions"
+for update
+to authenticated
+using (true)
+with check (true);
+
+update "public"."transactions" as t
+set
+  "status" = case
+    when s."status" = 'completed' then 'completed'
+    when s."status" = 'failed' then 'failed'
+    else t."status"
+  end,
+  "executed_at" = coalesce(s."completed_at", t."executed_at"),
+  "description" = case
+    when s."status" = 'completed' then
+      (
+        case
+          when s."action" = 'withdraw' then 'ATM withdrawal at '
+          else 'ATM deposit at '
+        end
+      ) || s."atm_name" || ' - ' || s."atm_location"
+    when s."status" = 'failed' then
+      (
+        case
+          when s."action" = 'withdraw' then 'Cancelled ATM withdrawal at '
+          else 'Cancelled ATM deposit at '
+        end
+      ) || s."atm_name" || ' - ' || s."atm_location"
+    else t."description"
+  end
+from "public"."atm_simulations" as s
+where
+  t."transaction_id" = s."transaction_id"
+  and t."transaction_type" in ('atm_withdrawal', 'atm_deposit')
+  and (
+    (s."status" = 'completed' and coalesce(t."status", 'pending') <> 'completed')
+    or (s."status" = 'failed' and coalesce(t."status", 'pending') <> 'failed')
+  );
