@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Landmark, LogOut, Menu, X } from "lucide-react";
+import { Bell, HandCoins, Landmark, LogOut, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { LogoutButton } from "@/components/logout-button";
 import { createClient } from "@/lib/supabase/client";
@@ -104,6 +104,11 @@ const navItems: NavItem[] = [
         <path d="M22 2L15 22l-4-9-9-4 20-7z" />
       </svg>
     ),
+  },
+  {
+    label: "Loans",
+    href: "/admin/loans",
+    icon: <HandCoins className="h-5 w-5" />,
   },
   {
     label: "Reports",

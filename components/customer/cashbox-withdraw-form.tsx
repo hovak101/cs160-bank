@@ -18,11 +18,15 @@ type Account = {
 type CashboxWithdrawFormProps = {
   accounts: Account[];
   cashboxBalance: number;
+  embedded?: boolean;
+  continueHref?: string;
 };
 
 export default function CashboxWithdrawForm({
   accounts,
   cashboxBalance,
+  embedded = false,
+  continueHref = "/customer/cashbox",
 }: CashboxWithdrawFormProps) {
   const router = useRouter();
 
@@ -101,7 +105,7 @@ export default function CashboxWithdrawForm({
 
   function handleContinueCashbox() {
     setShowSuccessModal(false);
-    router.push("/customer/cashbox");
+    router.push(continueHref);
   }
 
   function handleGoDashboard() {
@@ -112,14 +116,16 @@ export default function CashboxWithdrawForm({
   return (
     <>
       <div className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[#0f172a] p-8">
-          <h1 className="text-3xl font-bold text-white">
-            Withdraw from CashBox
-          </h1>
-          <p className="mt-2 text-slate-400">
-            Move money from your CashBox into one of your active accounts.
-          </p>
-        </section>
+        {!embedded ? (
+          <section className="rounded-[32px] border border-white/10 bg-[#0f172a] p-8">
+            <h1 className="text-3xl font-bold text-white">
+              Withdraw from CashBox
+            </h1>
+            <p className="mt-2 text-slate-400">
+              Move money from your CashBox into one of your active accounts.
+            </p>
+          </section>
+        ) : null}
 
         <Card className="border-white/10 bg-[#0f172a] p-6">
           <div className="mb-5 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
@@ -199,12 +205,14 @@ export default function CashboxWithdrawForm({
                 {loading ? "Processing..." : "Withdraw"}
               </button>
 
-              <Link
-                href="/customer/cashbox"
-                className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-300"
-              >
-                Back to CashBox
-              </Link>
+              {!embedded ? (
+                <Link
+                  href="/customer/cashbox"
+                  className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-300"
+                >
+                  Back to CashBox
+                </Link>
+              ) : null}
             </div>
           </form>
         </Card>
@@ -222,7 +230,7 @@ export default function CashboxWithdrawForm({
                 onClick={handleContinueCashbox}
                 className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
               >
-                Continue using CashBox
+                {embedded ? "Continue in Transfers" : "Continue using CashBox"}
               </button>
 
               <button

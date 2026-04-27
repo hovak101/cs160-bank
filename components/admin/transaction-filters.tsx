@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 export interface TransactionFilters {
   transactionType?: string;
@@ -196,6 +196,8 @@ export function TransactionFilters({
                   <option value="">All Types</option>
                   <option value="deposit">Deposit</option>
                   <option value="withdrawal">Withdrawal</option>
+                  <option value="atm_deposit">ATM Deposit</option>
+                  <option value="atm_withdrawal">ATM Withdrawal</option>
                   <option value="transfer">Transfer</option>
                   <option value="fee">Fee</option>
                   <option value="interest">Interest</option>

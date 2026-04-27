@@ -4,16 +4,17 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   let lat = searchParams.get("lat");
   let lng = searchParams.get("lng");
-  const zip = searchParams.get("zip");
+  const query =
+    searchParams.get("query")?.trim() || searchParams.get("zip")?.trim() || "";
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "Google Maps API key not configured" }, { status: 500 });
   }
 
-  // If zip/city provided, geocode it to lat/lng
-  if (zip && (!lat || !lng)) {
-    const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(zip)}&key=${apiKey}`;
+  // If an address, city, or zip is provided, geocode it to lat/lng first.
+  if (query && (!lat || !lng)) {
+    const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
     const geoRes = await fetch(geoUrl);
     const geoData = await geoRes.json();
 
@@ -26,10 +27,14 @@ export async function GET(request: Request) {
   }
 
   if (!lat || !lng) {
-    return NextResponse.json({ error: "lat/lng or zip are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "lat/lng or a search query are required" },
+      { status: 400 }
+    );
   }
 
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=8000&keyword=Chase+ATM&type=atm&key=${apiKey}`;
+  const keyword = encodeURIComponent("Chase ATM");
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=12000&type=atm&keyword=${keyword}&key=${apiKey}`;
 
   const res = await fetch(url);
   const data = await res.json();
@@ -38,23 +43,46 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Google Places API error" }, { status: 500 });
   }
 
-  const results = (data.results || []).slice(0, 10).map((place: any) => {
-    const placeLat = place.geometry.location.lat;
-    const placeLng = place.geometry.location.lng;
-    const dist = haversine(Number(lat), Number(lng), placeLat, placeLng);
+  const results = ((data.results || []) as GooglePlaceResult[])
+    .filter(isChaseAtmResult)
+    .slice(0, 10)
+    .map((place) => {
+      const placeLat = Number(place.geometry?.location?.lat ?? 0);
+      const placeLng = Number(place.geometry?.location?.lng ?? 0);
+      const distanceMiles = haversine(Number(lat), Number(lng), placeLat, placeLng);
 
-    return {
+      return {
+        atm_id:
+          place.place_id ||
+          `${slugify(place.name || "atm")}-${placeLat.toFixed(5)}-${placeLng.toFixed(5)}`,
+        name: place.name || "Chase ATM",
+        address: place.vicinity || place.formatted_address || "Address unavailable",
+        lat: placeLat,
+        lng: placeLng,
+        distance: formatDistance(distanceMiles),
+        distance_miles: distanceMiles,
+      };
+    })
+    .sort((a, b) => a.distance_miles - b.distance_miles)
+    .map((place) => ({
+      atm_id: place.atm_id,
       name: place.name,
-      address: place.vicinity,
-      lat: placeLat,
-      lng: placeLng,
-      distance: dist < 1 ? `${Math.round(dist * 5280)} ft` : `${dist.toFixed(1)} mi`,
-    };
-  });
-
-  results.sort((a: any, b: any) => parseFloat(a.distance) - parseFloat(b.distance));
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+      distance: place.distance,
+    }));
 
   return NextResponse.json({ results, location: { lat: Number(lat), lng: Number(lng) } });
+}
+
+function isChaseAtmResult(place: GooglePlaceResult) {
+  const haystack = [place.name, place.vicinity, place.formatted_address]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes("chase");
 }
 
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -68,3 +96,30 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
       Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+function formatDistance(distanceMiles: number) {
+  return distanceMiles < 1
+    ? `${Math.round(distanceMiles * 5280)} ft`
+    : `${distanceMiles.toFixed(1)} mi`;
+}
+
+function slugify(value: string) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+type GooglePlaceResult = {
+  place_id?: string;
+  name?: string;
+  vicinity?: string;
+  formatted_address?: string;
+  geometry?: {
+    location?: {
+      lat?: number;
+      lng?: number;
+    };
+  };
+};

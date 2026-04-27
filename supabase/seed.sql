@@ -1,5 +1,5 @@
 -- =============================================================================
--- Seed Data for CS160 Bank Local Development
+-- Seed Data for Vitality Bank Local Development
 -- =============================================================================
 -- Mirrors the backend's user creation flow:
 --   1. INSERT into auth.users (fires handle_new_user trigger automatically)

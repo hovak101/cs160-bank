@@ -27,6 +27,11 @@ type Transaction = {
   executed_at: string | null;
 };
 
+type TransactionQueryResult = {
+  data: Transaction[];
+  error: null;
+};
+
 export default async function CustomerTransactionsPage() {
   const supabase = await createClient();
 
@@ -81,9 +86,9 @@ export default async function CustomerTransactionsPage() {
             description,
             executed_at
           `)
-        .or(accountOrQuery)
-        .order("executed_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null } as any);
+          .or(accountOrQuery)
+          .order("executed_at", { ascending: false })
+      : Promise.resolve<TransactionQueryResult>({ data: [], error: null });
 
   const incomingCashboxPromise = currentPhoneDigits
     ? supabase
@@ -99,10 +104,10 @@ export default async function CustomerTransactionsPage() {
           description,
           executed_at
         `)
-      .eq("transaction_type", "cashbox_send")
-      .ilike("description", `%${currentPhoneDigits}%`)
-      .order("executed_at", { ascending: false })
-    : Promise.resolve({ data: [], error: null } as any);
+        .eq("transaction_type", "cashbox_send")
+        .ilike("description", `%${currentPhoneDigits}%`)
+        .order("executed_at", { ascending: false })
+      : Promise.resolve<TransactionQueryResult>({ data: [], error: null });
 
   const [accountTxResult, incomingCashboxResult] = await Promise.all([
     accountTxPromise,
@@ -410,23 +415,76 @@ function getTransactionMeta(
     };
   }
 
-  if (normalizedType === "deposit") {
+  if (normalizedType === "deposit" || normalizedType === "atm_deposit") {
     return {
       direction: "incoming" as const,
-      title: "Deposit",
-      subtitle: tx.description || "Deposit completed",
+      title: normalizedType === "atm_deposit" ? "ATM Deposit" : "Deposit",
+      subtitle:
+        tx.description ||
+        (normalizedType === "atm_deposit"
+          ? "ATM deposit completed"
+          : "Deposit completed"),
       fromLabel: "External Source",
       toLabel: destinationLabel || "Your account",
     };
   }
 
-  if (normalizedType === "withdraw" || normalizedType === "withdrawal") {
+  if (
+    normalizedType === "withdraw" ||
+    normalizedType === "withdrawal" ||
+    normalizedType === "atm_withdrawal"
+  ) {
     return {
       direction: "outgoing" as const,
-      title: "Withdrawal",
-      subtitle: tx.description || "Withdrawal completed",
+      title:
+        normalizedType === "atm_withdrawal" ? "ATM Withdrawal" : "Withdrawal",
+      subtitle:
+        tx.description ||
+        (normalizedType === "atm_withdrawal"
+          ? "ATM withdrawal completed"
+          : "Withdrawal completed"),
       fromLabel: sourceLabel || "Your account",
       toLabel: "External / Cash",
+    };
+  }
+
+  if (normalizedType === "credit_payment") {
+    return {
+      direction: "internal" as const,
+      title: "Credit Card Payment",
+      subtitle: tx.description || "Payment sent to your card balance",
+      fromLabel: sourceLabel || "Deposit account",
+      toLabel: destinationLabel || "Credit card",
+    };
+  }
+
+  if (normalizedType === "credit_purchase") {
+    return {
+      direction: "outgoing" as const,
+      title: "Credit Card Purchase",
+      subtitle: tx.description || "Card purchase posted",
+      fromLabel: sourceLabel || "Credit card",
+      toLabel: "Merchant",
+    };
+  }
+
+  if (normalizedType === "fee") {
+    return {
+      direction: "outgoing" as const,
+      title: "Fee Charged",
+      subtitle: tx.description || "Bank fee posted",
+      fromLabel: sourceLabel || "Account",
+      toLabel: "Bank",
+    };
+  }
+
+  if (normalizedType === "interest") {
+    return {
+      direction: "incoming" as const,
+      title: "Interest Credit",
+      subtitle: tx.description || "Interest credited",
+      fromLabel: "Bank",
+      toLabel: destinationLabel || "Your account",
     };
   }
 
@@ -481,9 +539,25 @@ function formatTransactionType(type: string | null) {
       return "Bill Payment";
     case "deposit":
       return "Deposit";
+    case "atm_deposit":
+      return "ATM Deposit";
+    case "atm_withdrawal":
+      return "ATM Withdrawal";
     case "withdraw":
     case "withdrawal":
       return "Withdrawal";
+    case "credit_payment":
+      return "Credit Card Payment";
+    case "credit_purchase":
+      return "Credit Card Purchase";
+    case "loan_disbursement":
+      return "Loan Disbursement";
+    case "loan_payment":
+      return "Loan Payment";
+    case "fee":
+      return "Fee";
+    case "interest":
+      return "Interest Credit";
     case "transfer":
       return "Transfer";
     default:
