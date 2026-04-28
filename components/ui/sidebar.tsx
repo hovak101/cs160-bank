@@ -9,7 +9,6 @@ import {
   Users,
   ArrowRightLeft,
   Send,
-  Settings,
   Landmark,
   CalendarClock,
   HandCoins,
@@ -82,12 +81,6 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
       icon: CalendarClock,
       href: "/customer/bill-payments",
       matchPrefixes: ["/customer/bill-payments"],
-    },
-    {
-      name: "Settings",
-      icon: Settings,
-      href: "/customer/settings",
-      matchPrefixes: ["/customer/settings"],
     },
   ];
 

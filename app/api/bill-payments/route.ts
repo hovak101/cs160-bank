@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { validateMoneyAmount } from "@/lib/banking/validation";
+import { validateMoneyAmount, validateNotPastDate } from "@/lib/banking/validation";
+import { todayInBankTz } from "@/lib/banking/clock";
 
 // get all bill payment schedules for the logged in user
 export async function GET() {
@@ -74,6 +75,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: amountError }, { status: 400 });
   }
 
+  const startDateError = validateNotPastDate(start_date, todayInBankTz(), "Start date");
+  if (startDateError) {
+    return NextResponse.json({ error: startDateError }, { status: 400 });
+  }
+
   if (end_date && end_date <= start_date) {
     return NextResponse.json({ error: "End date must be after start date." }, { status: 400 });
   }
@@ -92,7 +98,7 @@ export async function POST(request: Request) {
 
   const { data: sourceAccount } = await supabase
     .from("accounts")
-    .select("account_id, account_type, status")
+    .select("account_id, account_type, status, balance")
     .eq("account_id", account_id)
     .eq("customer_id", customerData!.customer_id)
     .single();
@@ -102,6 +108,14 @@ export async function POST(request: Request) {
   }
   if (sourceAccount.status !== "active") {
     return NextResponse.json({ error: "That account is not active." }, { status: 400 });
+  }
+  if (Number(sourceAccount.balance) < Number(amount)) {
+    return NextResponse.json(
+      {
+        error: `Insufficient funds in source account. Balance is $${Number(sourceAccount.balance).toFixed(2)}, scheduled amount is $${Number(amount).toFixed(2)}.`,
+      },
+      { status: 400 },
+    );
   }
 
   // Look up the payee by account number, they must be a customer of this bank

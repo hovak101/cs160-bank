@@ -295,9 +295,12 @@ DECLARE
   v_carol_cred uuid := '1a000000-0000-0000-0000-00000000c103';
   v_david_chk  uuid := '1a000000-0000-0000-0000-00000000c201';
   v_david_sav  uuid := '1a000000-0000-0000-0000-00000000c202';
+  v_david_cred uuid := '1a000000-0000-0000-0000-00000000c203';
   v_emma_chk   uuid := '1a000000-0000-0000-0000-00000000c301';
   v_emma_sav   uuid := '1a000000-0000-0000-0000-00000000c302';
+  v_emma_cred  uuid := '1a000000-0000-0000-0000-00000000c303';
   v_grace_chk  uuid := '1a000000-0000-0000-0000-00000000c501';
+  v_grace_cred uuid := '1a000000-0000-0000-0000-00000000c503';
 BEGIN
   -- Idempotency guard: if Carol's checking already exists, financial data
   -- has already been seeded — skip silently.
@@ -319,34 +322,75 @@ BEGIN
     (v_carol_cred, v_carol_cust, 'Carol Visa',      '1000000003', 'credit',    487.32, 'USD', 'active', NOW() - INTERVAL '45 days', NOW() - INTERVAL '2 days'),
     (v_david_chk,  v_david_cust, 'David Checking',  '1000000004', 'checking', 1825.00, 'USD', 'active', NOW() - INTERVAL '50 days', NOW() - INTERVAL '3 days'),
     (v_david_sav,  v_david_cust, 'David Savings',   '1000000005', 'saving',   3200.00, 'USD', 'active', NOW() - INTERVAL '50 days', NOW() - INTERVAL '7 days'),
+    (v_david_cred, v_david_cust, 'David Mastercard','1000000010', 'credit',      0.00, 'USD', 'active', NOW() - INTERVAL '40 days', NOW() - INTERVAL '40 days'),
     (v_emma_chk,   v_emma_cust,  'Emma Checking',   '1000000006', 'checking', 7500.00, 'USD', 'active', NOW() - INTERVAL '90 days', NOW() - INTERVAL '1 day'),
     (v_emma_sav,   v_emma_cust,  'Emma Savings',    '1000000007', 'saving',  25000.00, 'USD', 'active', NOW() - INTERVAL '90 days', NOW() - INTERVAL '4 days'),
-    (v_grace_chk,  v_grace_cust, 'Grace Checking',  '1000000008', 'checking',  500.00, 'USD', 'active', NOW() - INTERVAL '7 days',  NOW() - INTERVAL '1 day');
+    (v_emma_cred,  v_emma_cust,  'Emma Visa',       '1000000011', 'credit',      0.00, 'USD', 'active', NOW() - INTERVAL '80 days', NOW() - INTERVAL '80 days'),
+    (v_grace_chk,  v_grace_cust, 'Grace Checking',  '1000000008', 'checking',  500.00, 'USD', 'active', NOW() - INTERVAL '7 days',  NOW() - INTERVAL '1 day'),
+    (v_grace_cred, v_grace_cust, 'Grace Visa',      '1000000013', 'credit',      0.00, 'USD', 'active', NOW() - INTERVAL '5 days',  NOW() - INTERVAL '5 days');
 
-  -- ----- Credit account + card (Carol) -----
+  -- ----- Credit accounts + cards -----
+  -- Carol carries a real balance / pending statement (full demo).
+  -- David, Emma, Grace start clean ($0 balance, no statement yet) so test
+  -- logins can exercise purchase / cash-advance flows from a fresh state.
+  -- Frank is intentionally excluded — he is the "no credit card" demo login.
   INSERT INTO public.credit_accounts (
     account_id, credit_limit, current_balance, statement_balance, minimum_payment_due,
     apr, purchase_apr, cash_advance_apr, cash_advance_limit, cash_advance_balance,
     late_fee_amount, rewards_points,
     last_statement_at, next_statement_at, payment_due_at, last_payment_at,
     created_at, updated_at
-  ) VALUES (
-    v_carol_cred, 5000.00, 487.32, 487.32, 25.00,
-    24.99, 24.99, 29.99, 1500.00, 0.00,
-    35.00, 17.50,
-    NOW() - INTERVAL '5 days', NOW() + INTERVAL '25 days', NOW() + INTERVAL '20 days', NOW() - INTERVAL '35 days',
-    NOW() - INTERVAL '45 days', NOW() - INTERVAL '2 days'
-  );
+  ) VALUES
+    (v_carol_cred, 5000.00, 487.32, 487.32, 25.00,
+     24.99, 24.99, 29.99, 1500.00, 0.00,
+     35.00, 17.50,
+     NOW() - INTERVAL '5 days', NOW() + INTERVAL '25 days', NOW() + INTERVAL '20 days', NOW() - INTERVAL '35 days',
+     NOW() - INTERVAL '45 days', NOW() - INTERVAL '2 days'),
+    (v_david_cred, 3000.00, 0.00, 0.00, 0.00,
+     24.99, 24.99, 29.99,  900.00, 0.00,
+     35.00, 0.00,
+     NULL, NOW() + INTERVAL '30 days', NOW() + INTERVAL '25 days', NULL,
+     NOW() - INTERVAL '40 days', NOW() - INTERVAL '40 days'),
+    (v_emma_cred,  8000.00, 0.00, 0.00, 0.00,
+     22.99, 22.99, 27.99, 2400.00, 0.00,
+     35.00, 0.00,
+     NULL, NOW() + INTERVAL '30 days', NOW() + INTERVAL '25 days', NULL,
+     NOW() - INTERVAL '80 days', NOW() - INTERVAL '80 days'),
+    (v_grace_cred, 1000.00, 0.00, 0.00, 0.00,
+     26.99, 26.99, 31.99,  300.00, 0.00,
+     35.00, 0.00,
+     NULL, NOW() + INTERVAL '30 days', NOW() + INTERVAL '25 days', NULL,
+     NOW() - INTERVAL '5 days',  NOW() - INTERVAL '5 days');
 
+  -- security_code_mode = 'legacy_demo' → CVV is the last 3 digits of card_last4.
+  -- Hash is sha256(<last3>) prefixed 'sha256:' to match the migration backfill
+  -- in 20260422101500_add_credit_card_security_code.sql:14-19. Demo CVVs:
+  --   Carol Visa •4271 → 271
+  --   David Mastercard •5482 → 482
+  --   Emma  Visa •3719 → 719
+  --   Grace Visa •9035 → 035
   INSERT INTO public.credit_cards (
     card_id, account_id, cardholder_name, card_brand, card_last4, card_status,
     rewards_program, rewards_rate, exp_month, exp_year,
+    security_code_hash, security_code_mode, security_code_last_updated_at,
     created_at, updated_at
-  ) VALUES (
-    '3c000000-0000-0000-0000-00000000c101', v_carol_cred, 'Carol Williams', 'Visa', '4271', 'active',
-    'Cash Back', 0.0150, 8, 2030,
-    NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'
-  );
+  ) VALUES
+    ('3c000000-0000-0000-0000-00000000c101', v_carol_cred, 'Carol Williams', 'Visa',       '4271', 'active',
+     'Cash Back', 0.0150, 8, 2030,
+     'sha256:' || encode(extensions.digest('271', 'sha256'), 'hex'), 'legacy_demo', NOW() - INTERVAL '45 days',
+     NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+    ('3c000000-0000-0000-0000-00000000c201', v_david_cred, 'David Brown',    'Mastercard', '5482', 'active',
+     'Cash Back', 0.0125, 11, 2030,
+     'sha256:' || encode(extensions.digest('482', 'sha256'), 'hex'), 'legacy_demo', NOW() - INTERVAL '40 days',
+     NOW() - INTERVAL '40 days', NOW() - INTERVAL '40 days'),
+    ('3c000000-0000-0000-0000-00000000c301', v_emma_cred,  'Emma Davis',     'Visa',       '3719', 'active',
+     'Cash Back', 0.0175,  6, 2030,
+     'sha256:' || encode(extensions.digest('719', 'sha256'), 'hex'), 'legacy_demo', NOW() - INTERVAL '80 days',
+     NOW() - INTERVAL '80 days', NOW() - INTERVAL '80 days'),
+    ('3c000000-0000-0000-0000-00000000c501', v_grace_cred, 'Grace Lee',      'Visa',       '9035', 'active',
+     'Cash Back', 0.0100,  3, 2030,
+     'sha256:' || encode(extensions.digest('035', 'sha256'), 'hex'), 'legacy_demo', NOW() - INTERVAL '5 days',
+     NOW() - INTERVAL '5 days',  NOW() - INTERVAL '5 days');
 
   -- ----- Cashboxes (rows already created by trigger; just top one up) -----
   UPDATE public.cashboxes SET balance = 50.00, updated_at = NOW() - INTERVAL '4 days'

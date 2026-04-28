@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { timingSafeEqual } from "crypto";
+import { todayInBankTz } from "@/lib/banking/clock";
 
 // this runs every day at 8am via vercel cron
 // it finds all payments that are due and processes them
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInBankTz();
 
   const { data: dueSchedules, error: fetchError } = await supabase
     .from("bill_schedules")
@@ -70,9 +71,11 @@ async function processOnePayment(supabase: any, schedule: any, today: string) {
     return;
   }
 
-  // Insufficient funds, cancel and log failure
-  if (fromAccount.balance < schedule.amount) {
-    await cancelSchedule(supabase, schedule.schedule_id);
+  // Insufficient funds: log the failed cycle but keep the schedule active.
+  // Advance next_payment_date by one frequency unit so the cron doesn't retry
+  // the same failing date on every tick — the user fixes their balance and the
+  // next cycle runs normally.
+  if (Number(fromAccount.balance) < Number(schedule.amount)) {
     await supabase.from("payment_executions").insert({
       schedule_id: schedule.schedule_id,
       scheduled_date: schedule.next_payment_date,
@@ -81,6 +84,16 @@ async function processOnePayment(supabase: any, schedule: any, today: string) {
       failure_reason: "insufficient_funds",
       retry_count: 0,
     });
+
+    const nextPaymentDate = getNextDate(schedule.next_payment_date, schedule.frequency);
+    const scheduleIsDone = schedule.end_date && nextPaymentDate > schedule.end_date;
+    await supabase
+      .from("bill_schedules")
+      .update({
+        next_payment_date: nextPaymentDate,
+        status: scheduleIsDone ? "completed" : "active",
+      })
+      .eq("schedule_id", schedule.schedule_id);
     return;
   }
 
