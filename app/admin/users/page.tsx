@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 type UserItem = {
   user_id: string;
@@ -285,7 +285,7 @@ export default function AdminUsersPage() {
             className="h-12 rounded-xl border border-slate-700 bg-[#0b1a33] px-4 text-white outline-none transition focus:border-cyan-400"
           />
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               onClick={handleSearch}
               className="h-12 rounded-xl bg-cyan-500 px-6 font-semibold text-slate-950 transition hover:bg-cyan-400"
@@ -319,7 +319,8 @@ export default function AdminUsersPage() {
       ) : null}
 
       {loading ? (
-        <div className="mt-6 rounded-2xl border border-cyan-500/10 bg-[#081328] p-6 text-slate-300">
+        <div className="mt-6 flex items-center justify-center gap-2 rounded-2xl border border-cyan-500/10 bg-[#081328] p-6 text-slate-300">
+          <Loader2 className="animate-spin" size={18} />
           Loading users...
         </div>
       ) : null}
@@ -367,7 +368,7 @@ export default function AdminUsersPage() {
                         </span>
                       </div>
 
-                      <p className="mt-3 text-sm text-slate-400">
+                      <p className="mt-3 break-all font-mono text-xs text-slate-400">
                         User ID: {user.user_id}
                       </p>
 
@@ -384,12 +385,12 @@ export default function AdminUsersPage() {
                       ) : null}
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-3">
                       {user.is_active === false || isTemporarilyLocked(user.account_locked_until) ? (
                         <button
                           onClick={() => handleActivate(user.user_id)}
                           disabled={updatingId === user.user_id}
-                          className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-5 py-3 font-semibold text-emerald-300 transition hover:bg-emerald-500/25 disabled:opacity-60"
+                          className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-5 py-3 font-semibold text-emerald-300 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none"
                         >
                           {updatingId === user.user_id ? "Updating..." : "Activate"}
                         </button>
@@ -397,7 +398,7 @@ export default function AdminUsersPage() {
                         <button
                           onClick={() => openDeactivateModal(user)}
                           disabled={updatingId === user.user_id}
-                          className="rounded-xl border border-red-500/30 bg-red-500/15 px-5 py-3 font-semibold text-red-300 transition hover:bg-red-500/25 disabled:opacity-60"
+                          className="rounded-xl border border-red-500/30 bg-red-500/15 px-5 py-3 font-semibold text-red-300 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none"
                         >
                           {updatingId === user.user_id ? "Updating..." : "Deactivate"}
                         </button>
@@ -497,7 +498,7 @@ export default function AdminUsersPage() {
 
       {showModal && selectedUser ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-xl rounded-3xl border border-cyan-500/10 bg-[#081328] p-6 shadow-2xl">
+          <div className="w-full max-w-xl rounded-3xl border border-cyan-500/10 bg-[#081328] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-2xl font-bold text-white">Deactivate User</h3>
             <p className="mt-2 text-slate-400">
               Choose a reason and lock type for{" "}
@@ -570,7 +571,7 @@ export default function AdminUsersPage() {
               <button
                 onClick={handleDeactivateConfirm}
                 disabled={updatingId === selectedUser.user_id}
-                className="rounded-xl border border-red-500/30 bg-red-500/15 px-5 py-3 font-semibold text-red-300 transition hover:bg-red-500/25 disabled:opacity-60"
+                className="rounded-xl border border-red-500/30 bg-red-500/15 px-5 py-3 font-semibold text-red-300 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none"
               >
                 {updatingId === selectedUser.user_id
                   ? "Updating..."

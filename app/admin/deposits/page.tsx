@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { TransactionFilters, type TransactionFilters as TransactionFiltersType } from "@/components/admin/transaction-filters";
 
 type TransactionItem = {
@@ -250,7 +250,7 @@ export default function AdminDepositsPage() {
             className="h-12 rounded-xl border border-slate-700 bg-[#0b1a33] px-4 text-white outline-none transition focus:border-cyan-400"
           />
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <TransactionFilters
               onFiltersChange={handleFiltersChange}
               initialFilters={filters}
@@ -293,7 +293,8 @@ export default function AdminDepositsPage() {
       ) : null}
 
       {loading ? (
-        <div className="mt-6 rounded-2xl border border-cyan-500/10 bg-[#081328] p-6 text-slate-300">
+        <div className="mt-6 flex items-center justify-center gap-2 rounded-2xl border border-cyan-500/10 bg-[#081328] p-6 text-slate-300">
+          <Loader2 className="animate-spin" size={18} />
           Loading deposits...
         </div>
       ) : null}
@@ -340,7 +341,10 @@ export default function AdminDepositsPage() {
                       <p className="text-xs uppercase tracking-wide text-slate-500">
                         Reference #
                       </p>
-                      <p className="mt-2 truncate text-sm font-semibold text-white">
+                      <p
+                        className="mt-2 break-all font-mono text-xs font-semibold text-white"
+                        title={transaction.reference_number ?? ""}
+                      >
                         {transaction.reference_number}
                       </p>
                     </div>
@@ -358,7 +362,10 @@ export default function AdminDepositsPage() {
                       <p className="text-xs uppercase tracking-wide text-slate-500">
                         Description
                       </p>
-                      <p className="mt-2 truncate text-sm font-semibold text-white">
+                      <p
+                        className="mt-2 truncate text-sm font-semibold text-white"
+                        title={transaction.description || ""}
+                      >
                         {transaction.description || "N/A"}
                       </p>
                     </div>
@@ -370,7 +377,10 @@ export default function AdminDepositsPage() {
                         <p className="text-xs uppercase tracking-wide text-slate-500">
                           Destination Account
                         </p>
-                        <p className="mt-2 truncate text-sm font-semibold text-white">
+                        <p
+                          className="mt-2 break-all font-mono text-xs font-semibold text-white"
+                          title={transaction.destination_account_id ?? ""}
+                        >
                           {transaction.destination_account_id}
                         </p>
                       </div>
@@ -384,7 +394,7 @@ export default function AdminDepositsPage() {
       ) : null}
 
       {!loading && totalPages > 1 ? (
-        <div className="mt-8 flex items-center justify-center gap-2">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage === 1}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { computeLoanOutstandingAmount } from "@/lib/banking/loans";
 import { roundCurrency } from "@/lib/banking/rules";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -47,6 +48,11 @@ export async function POST(request: Request) {
         { error: "Payment amount must be greater than zero." },
         { status: 400 }
       );
+    }
+
+    const amountError = validateMoneyAmount(amount, 100_000);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
     }
 
     const { data: customer, error: customerError } = await supabase

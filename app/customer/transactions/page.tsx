@@ -228,9 +228,9 @@ export default async function CustomerTransactionsPage() {
                       </p>
 
                       <div className="mt-2 space-y-1 text-xs text-slate-500">
-                        <p>Ref: {tx.reference_number || "N/A"}</p>
-                        <p>From: {meta.fromLabel}</p>
-                        <p>To: {meta.toLabel}</p>
+                        <p className="break-all">Ref: {tx.reference_number || "N/A"}</p>
+                        <p className="break-words">From: {meta.fromLabel}</p>
+                        <p className="break-words">To: {meta.toLabel}</p>
                       </div>
                     </div>
                   </div>

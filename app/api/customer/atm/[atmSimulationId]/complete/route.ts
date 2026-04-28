@@ -135,6 +135,29 @@ export async function POST(
       );
     }
 
+    const { data: claimedSimulation, error: claimSimulationError } = await supabase
+      .from("atm_simulations")
+      .update({
+        status: "completed",
+        completed_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("status", "pending")
+      .eq("atm_simulation_id", simulation.atm_simulation_id)
+      .select("atm_simulation_id")
+      .maybeSingle();
+
+    if (claimSimulationError || !claimedSimulation) {
+      return NextResponse.json(
+        {
+          error:
+            claimSimulationError?.message ||
+            "This ATM action has already been completed.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (action === "deposit") {
       if (!canUseAtmDeposit(account.account_type)) {
         return NextResponse.json(
@@ -344,29 +367,6 @@ export async function POST(
           error:
             updateTransactionError?.message ||
             "Balance updated but the ATM transaction record could not be completed.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const { data: updatedSimulation, error: updateSimulationError } = await supabase
-      .from("atm_simulations")
-      .update({
-        status: "completed",
-        completed_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq("status", "pending")
-      .eq("atm_simulation_id", simulation.atm_simulation_id)
-      .select("atm_simulation_id")
-      .maybeSingle();
-
-    if (updateSimulationError || !updatedSimulation) {
-      return NextResponse.json(
-        {
-          error:
-            updateSimulationError?.message ||
-            "ATM transaction completed but the ATM session could not be marked complete.",
         },
         { status: 500 }
       );

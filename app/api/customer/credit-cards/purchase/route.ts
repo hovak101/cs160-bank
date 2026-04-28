@@ -7,6 +7,7 @@ import {
   isValidSecurityCodeFormat,
   normalizeSecurityCode,
 } from "@/lib/banking/security-code";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
         { error: "Credit account, merchant, and valid amount are required." },
         { status: 400 }
       );
+    }
+
+    const amountError = validateMoneyAmount(amount);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
     }
 
     if (!isValidSecurityCodeFormat(securityCode)) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,11 @@ export async function POST(request: Request) {
         { error: "Phone number and valid amount are required." },
         { status: 400 }
       );
+    }
+
+    const amountError = validateMoneyAmount(amount);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
     }
 
     const { data: senderCustomer, error: senderCustomerError } =

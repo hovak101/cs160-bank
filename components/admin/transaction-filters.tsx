@@ -122,7 +122,7 @@ export function TransactionFilters({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-700 bg-[#0b1a33] p-4 shadow-lg z-50">
+        <div className="absolute left-0 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-slate-700 bg-[#0b1a33] p-4 shadow-lg z-50 sm:left-auto sm:right-0">
           <div className="space-y-4">
             {/* Date Sort */}
             <div>
