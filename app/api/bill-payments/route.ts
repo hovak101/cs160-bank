@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { validateMoneyAmount } from "@/lib/banking/validation";
+import { validateMoneyAmount, validateNotPastDate } from "@/lib/banking/validation";
+import { todayInBankTz } from "@/lib/banking/clock";
 
 // get all bill payment schedules for the logged in user
 export async function GET() {
@@ -72,6 +73,11 @@ export async function POST(request: Request) {
   const amountError = validateMoneyAmount(Number(amount));
   if (amountError) {
     return NextResponse.json({ error: amountError }, { status: 400 });
+  }
+
+  const startDateError = validateNotPastDate(start_date, todayInBankTz(), "Start date");
+  if (startDateError) {
+    return NextResponse.json({ error: startDateError }, { status: 400 });
   }
 
   if (end_date && end_date <= start_date) {

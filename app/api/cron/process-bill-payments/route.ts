@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { timingSafeEqual } from "crypto";
+import { todayInBankTz } from "@/lib/banking/clock";
 
 // this runs every day at 8am via vercel cron
 // it finds all payments that are due and processes them
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInBankTz();
 
   const { data: dueSchedules, error: fetchError } = await supabase
     .from("bill_schedules")

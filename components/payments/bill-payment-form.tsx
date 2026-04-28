@@ -9,6 +9,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { isCheckingAccount } from "@/lib/banking/rules";
+import { validateMoneyAmount, validateNotPastDate } from "@/lib/banking/validation";
+import { todayInBankTz } from "@/lib/banking/clock";
 
 type Account = {
   account_id: string;
@@ -21,6 +23,8 @@ export function BillPaymentForm() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const todayStr = todayInBankTz();
 
   const supabase = createClient();
 
@@ -55,10 +59,36 @@ export function BillPaymentForm() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setFormError(null);
     setSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
     const payload = Object.fromEntries(formData.entries());
+
+    const amountNum = parseFloat(payload.amount as string);
+    const amountErr = validateMoneyAmount(amountNum);
+    if (amountErr) {
+      setFormError(amountErr);
+      toast.error(amountErr);
+      setSubmitting(false);
+      return;
+    }
+
+    const startDateErr = validateNotPastDate(payload.start_date as string, todayStr, "Start date");
+    if (startDateErr) {
+      setFormError(startDateErr);
+      toast.error(startDateErr);
+      setSubmitting(false);
+      return;
+    }
+
+    if (payload.end_date && (payload.end_date as string) <= (payload.start_date as string)) {
+      const msg = "End date must be after start date.";
+      setFormError(msg);
+      toast.error(msg);
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/bill-payments", {
@@ -66,7 +96,7 @@ export function BillPaymentForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          amount: parseFloat(payload.amount as string),
+          amount: amountNum,
         }),
       });
 
@@ -78,6 +108,7 @@ export function BillPaymentForm() {
       window.location.reload();
     } catch (err: any) {
       console.error("Submit error:", err);
+      setFormError(err.message || "An error occurred");
       toast.error(err.message || "An error occurred");
     } finally {
       setSubmitting(false);
@@ -170,6 +201,7 @@ export function BillPaymentForm() {
               <Input
                 name="start_date"
                 type="date"
+                min={todayStr}
                 className="bg-white/5 border-white/10 text-xs focus:border-cyan-400"
                 required
               />
@@ -179,10 +211,17 @@ export function BillPaymentForm() {
               <Input
                 name="end_date"
                 type="date"
+                min={todayStr}
                 className="bg-white/5 border-white/10 text-xs focus:border-cyan-400"
               />
             </div>
           </div>
+
+          {formError && (
+            <p role="alert" className="text-sm text-red-400 font-medium">
+              {formError}
+            </p>
+          )}
 
           <Button
             type="submit"
