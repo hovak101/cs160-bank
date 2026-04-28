@@ -1974,6 +1974,7 @@ where
   );
 
 -- 20260427120000_create_cheques_bucket.sql
-insert into storage.buckets (id, name, public)
-values ('cheques', 'cheques', false)
-on conflict (id) do nothing;
+-- Bucket creation moved to zzz-app-seed.sql — storage.buckets doesn't exist
+-- at db-init time (the storage service migrates that schema on its own boot),
+-- so doing it here was a silent no-op. The seed container runs after auth is
+-- healthy, by which point the storage migrations have completed.

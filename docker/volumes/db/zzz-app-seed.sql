@@ -490,3 +490,15 @@ BEGIN
     (v_emma_sav,  date_trunc('month', CURRENT_DATE)::date, 24987.50, 2498.75, 0.00, 12.50, NOW() - INTERVAL '1 day', NOW() - INTERVAL '4 days', NOW() - INTERVAL '1 day');
 
 END $$;
+
+-- -----------------------------------------------------------------------------
+-- Storage buckets
+-- -----------------------------------------------------------------------------
+-- Created here (in the seed step, not init-time zz-app-schema.sql) because
+-- storage.buckets is created by the storage service's own migrations when it
+-- boots. At db-init time the table doesn't exist, so an INSERT there fails
+-- silently and uploads later return "Bucket not found". The seed container
+-- waits on auth: service_healthy, by which point storage has migrated.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('cheques', 'cheques', false)
+ON CONFLICT (id) DO NOTHING;
