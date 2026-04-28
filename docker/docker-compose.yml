@@ -382,6 +382,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      storage:
+        condition: service_healthy
     volumes:
       - ./volumes/db/zzz-app-seed.sql:/seed.sql:ro
     environment:
