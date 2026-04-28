@@ -10,6 +10,7 @@ import {
   getOrCreateSavingsMonthlyActivity,
   getRemainingSavingsWithdrawalAllowance,
 } from "@/lib/banking/server";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,11 @@ export async function POST(req: Request) {
         { error: "Valid amount is required." },
         { status: 400 }
       );
+    }
+
+    const amountError = validateMoneyAmount(amountValue);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
     }
 
     const { data: customer, error: customerError } = await supabase

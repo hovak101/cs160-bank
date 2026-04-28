@@ -92,8 +92,8 @@ export function LoginForm() {
       return;
     }
 
-    // Skip onboarding for managers - redirect directly to dashboard
-    if (appUser?.role === "manager") {
+    // Skip onboarding for non-customer roles - redirect directly to dashboard
+    if (appUser?.role && appUser.role !== "customer") {
       router.push("/dashboard");
     } else {
       // For regular customers, check if onboarding is needed

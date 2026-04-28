@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 // get all bill payment schedules for the logged in user
 export async function GET() {
@@ -66,6 +67,11 @@ export async function POST(request: Request) {
 
   if (amount <= 0) {
     return NextResponse.json({ error: "Amount must be greater than 0." }, { status: 400 });
+  }
+
+  const amountError = validateMoneyAmount(Number(amount));
+  if (amountError) {
+    return NextResponse.json({ error: amountError }, { status: 400 });
   }
 
   if (end_date && end_date <= start_date) {

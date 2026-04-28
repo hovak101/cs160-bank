@@ -175,7 +175,7 @@ export default async function AdminLoansPage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#22d3ee22,transparent_38%),radial-gradient(circle_at_right,#1d4ed833,transparent_34%)]" />
 
         <div className="relative z-10">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-teal-400">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.28em] text-teal-400">
             Admin Lending
           </p>
           <h1 className="text-3xl font-bold tracking-tight text-white lg:text-[2.5rem]">

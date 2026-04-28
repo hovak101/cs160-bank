@@ -154,6 +154,7 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
 
               <button
                 onClick={() => setMenuOpen(false)}
+                aria-label="Close navigation menu"
                 className="rounded-lg p-2 text-slate-400 transition hover:bg-white/5 hover:text-white"
               >
                 <X className="h-5 w-5" />
@@ -185,11 +186,12 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
         </>
       )}
 
-      <div className="flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-cyan-500/10 bg-[#051120]/95 px-6 backdrop-blur">
+      <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-cyan-500/10 bg-[#051120]/95 px-4 sm:px-6 backdrop-blur">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setMenuOpen(true)}
+              aria-label="Open navigation menu"
               className="rounded-lg p-2 text-slate-300 transition hover:bg-white/5 hover:text-white"
             >
               <Menu className="h-5 w-5" />
@@ -203,12 +205,12 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 md:gap-5">
-            <button className="text-slate-400 transition hover:text-white">
+          <div className="flex min-w-0 items-center gap-4 md:gap-5">
+            <button aria-label="Notifications" className="text-slate-400 transition hover:text-white">
               <Bell className="h-5 w-5" />
             </button>
 
-            <span className="hidden text-sm text-slate-400 md:block">
+            <span className="hidden truncate text-sm text-slate-400 md:block max-w-[14rem]">
               manager@vitalitybank.com
             </span>
 
@@ -216,7 +218,7 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 px-6 py-8">{children}</main>
+        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       </div>
     </div>
   );

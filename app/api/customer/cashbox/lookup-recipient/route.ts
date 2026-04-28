@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const phone_number = String(body.phone_number ?? "").trim();
+    const phone_number = String(body.phone_number ?? "").replace(/\D/g, "");
 
     if (!phone_number) {
       return NextResponse.json(
