@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 
 type Account = {
   account_id: string;
@@ -44,8 +45,11 @@ export default function CashboxWithdrawForm({
     (account) => account.account_id === targetAccountId
   );
 
-  const numericAmount = Number(amount || 0);
-  const insufficientCashbox = numericAmount > cashboxBalance;
+  const parsedAmount = parseCurrencyInput(amount, {
+    fieldLabel: "CashBox withdrawal amount",
+  });
+  const numericAmount = parsedAmount.ok ? parsedAmount.value : 0;
+  const insufficientCashbox = parsedAmount.ok && numericAmount > cashboxBalance;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -56,8 +60,8 @@ export default function CashboxWithdrawForm({
       return;
     }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError("Please enter a valid amount.");
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.error);
       return;
     }
 

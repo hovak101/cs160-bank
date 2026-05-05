@@ -33,8 +33,16 @@ export function TransactionFilters({
   const [isOpen, setIsOpen] = useState(false);
   const [dateSort, setDateSort] = useState<"asc" | "desc">(initialFilters?.dateSort || "desc");
   const [specificDate, setSpecificDate] = useState(initialFilters?.specificDate || "");
-  const [minAmount, setMinAmount] = useState(initialFilters?.minAmountDisplay || minAmountThreshold);
-  const [maxAmount, setMaxAmount] = useState(initialFilters?.maxAmount || "");
+  const [minAmount, setMinAmount] = useState(
+    initialFilters?.minAmountDisplay !== undefined
+      ? String(initialFilters.minAmountDisplay)
+      : minAmountThreshold > 0
+      ? String(minAmountThreshold)
+      : ""
+  );
+  const [maxAmount, setMaxAmount] = useState(
+    initialFilters?.maxAmount !== undefined ? String(initialFilters.maxAmount) : ""
+  );
   const [transactionType, setTransactionType] = useState(initialFilters?.transactionType || "");
   const [transactionStatus, setTransactionStatus] = useState(initialFilters?.transactionStatus || "");
   const [cashboxOnly, setCashboxOnly] = useState(initialFilters?.cashboxOnly || false);
@@ -45,11 +53,16 @@ export function TransactionFilters({
     };
 
     if (specificDate) filters.specificDate = specificDate;
-    if (minAmount > 0) {
-      filters.minAmountDisplay = minAmount;
-      filters.minAmount = minAmount;
+    const parsedMinAmount = Number(minAmount);
+    const parsedMaxAmount = Number(maxAmount);
+
+    if (minAmount !== "" && Number.isFinite(parsedMinAmount) && parsedMinAmount > 0) {
+      filters.minAmountDisplay = parsedMinAmount;
+      filters.minAmount = parsedMinAmount;
     }
-    if (maxAmount) filters.maxAmount = parseFloat(maxAmount as string);
+    if (maxAmount !== "" && Number.isFinite(parsedMaxAmount) && parsedMaxAmount >= 0) {
+      filters.maxAmount = parsedMaxAmount;
+    }
     if (cashboxOnly) filters.cashboxOnly = true;
     if (showTransactionType && transactionType) filters.transactionType = transactionType;
     if (transactionStatus) filters.transactionStatus = transactionStatus;
@@ -61,7 +74,7 @@ export function TransactionFilters({
   const handleClearFilters = () => {
     setDateSort("desc");
     setSpecificDate("");
-    setMinAmount(minAmountThreshold);
+    setMinAmount(minAmountThreshold > 0 ? String(minAmountThreshold) : "");
     setMaxAmount("");
     setTransactionStatus("");
     setCashboxOnly(false);
@@ -83,7 +96,7 @@ export function TransactionFilters({
     cashboxOnly ||
     transactionStatus ||
     (showTransactionType && transactionType) ||
-    minAmount > minAmountThreshold;
+    (minAmount !== "" && Number(minAmount) > minAmountThreshold);
 
   return (
     <div className="relative">
@@ -140,10 +153,10 @@ export function TransactionFilters({
                 type="number"
                 value={minAmount}
                 onChange={(e) => {
-                  const value = parseFloat(e.target.value) || minAmountThreshold;
-                  setMinAmount(Math.max(value, minAmountThreshold));
+                  setMinAmount(e.target.value);
                 }}
                 min={minAmountThreshold}
+                step="0.01"
                 placeholder="Min amount"
                 className="w-full rounded-lg border border-slate-600 bg-[#081328] px-3 py-2 text-white outline-none focus:border-cyan-400"
               />
@@ -157,10 +170,10 @@ export function TransactionFilters({
                 type="number"
                 value={maxAmount}
                 onChange={(e) => {
-                  const value = parseFloat(e.target.value) || 0;
-                  setMaxAmount(Math.max(value, 0).toString());
+                  setMaxAmount(e.target.value);
                 }}
                 min="0"
+                step="0.01"
                 placeholder="Max amount"
                 className="w-full rounded-lg border border-slate-600 bg-[#081328] px-3 py-2 text-white outline-none focus:border-cyan-400"
               />

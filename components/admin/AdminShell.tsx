@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, HandCoins, Landmark, LogOut, Menu, X } from "lucide-react";
+import { Bell, HandCoins, Landmark, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { LogoutButton } from "@/components/logout-button";
 import { createClient } from "@/lib/supabase/client";

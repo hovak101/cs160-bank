@@ -36,7 +36,7 @@ export default async function CreditCardPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const { data: accountsData } = await supabase
     .from("accounts")

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 
 type Account = {
   account_id: string;
@@ -105,9 +106,12 @@ export default function CashboxSendForm({
     [fundingSources, sourceValue]
   );
 
-  const numericAmount = Number(amount || 0);
+  const parsedAmount = parseCurrencyInput(amount, {
+    fieldLabel: "CashBox send amount",
+  });
+  const numericAmount = parsedAmount.ok ? parsedAmount.value : 0;
   const insufficientBalance = selectedSource
-    ? numericAmount > Number(selectedSource.balance ?? 0)
+    ? parsedAmount.ok && numericAmount > Number(selectedSource.balance ?? 0)
     : false;
 
   function formatPhoneNumber(value: string) {
@@ -217,8 +221,8 @@ export default function CashboxSendForm({
       return;
     }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError("Please enter a valid amount.");
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.error);
       return;
     }
 
@@ -255,8 +259,8 @@ export default function CashboxSendForm({
       return;
     }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError("Please enter a valid amount.");
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.error);
       setStep(2);
       return;
     }

@@ -5,11 +5,17 @@ import {
   computeCreditMinimumPayment,
   isCreditAccount,
   isSavingsAccount,
+  roundCurrency,
 } from "@/lib/banking/rules";
 import {
   getOrCreateSavingsMonthlyActivity,
   getRemainingSavingsWithdrawalAllowance,
 } from "@/lib/banking/server";
+import {
+  MAX_ACCOUNT_BALANCE,
+  parseCurrencyInput,
+  willExceedMaxAccountBalance,
+} from "@/lib/banking/amount";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +45,9 @@ export async function POST(req: Request) {
     const formData = await req.formData();
     const fromAccountId = String(formData.get("from_account_id") || "");
     const toAccountId = String(formData.get("to_account_id") || "");
-    const amountValue = Number(formData.get("amount"));
+    const parsedAmount = parseCurrencyInput(formData.get("amount"), {
+      fieldLabel: "Amount",
+    });
 
     if (!fromAccountId) {
       return NextResponse.json(
@@ -62,12 +70,14 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!amountValue || amountValue <= 0) {
+    if (!parsedAmount.ok) {
       return NextResponse.json(
-        { error: "Valid amount is required." },
+        { error: parsedAmount.error },
         { status: 400 }
       );
     }
+
+    const amountValue = parsedAmount.value;
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")
@@ -135,6 +145,25 @@ export async function POST(req: Request) {
     }
 
     const sourceBalance = Number(sourceAccount.balance || 0);
+    const destBalance = Number(destAccount.balance || 0);
+
+    if (
+      !isCreditAccount(destAccount.account_type) &&
+      willExceedMaxAccountBalance(destBalance, amountValue)
+    ) {
+      return NextResponse.json(
+        {
+          error: `Destination account cannot exceed ${new Intl.NumberFormat(
+            "en-US",
+            {
+              style: "currency",
+              currency: "USD",
+            }
+          ).format(MAX_ACCOUNT_BALANCE)}.`,
+        },
+        { status: 400 }
+      );
+    }
 
     if (amountValue > sourceBalance) {
       return NextResponse.json(
@@ -173,7 +202,7 @@ export async function POST(req: Request) {
     const { error: updateSourceError } = await supabase
       .from("accounts")
       .update({
-        balance: sourceBalance - amountValue,
+        balance: roundCurrency(sourceBalance - amountValue),
         updated_at: nowIso,
       })
       .eq("account_id", sourceAccount.account_id);
@@ -191,7 +220,9 @@ export async function POST(req: Request) {
         .from("savings_monthly_activity")
         .update({
           withdrawn_amount:
-            Number(savingsMonthlyActivity.withdrawn_amount || 0) + amountValue,
+            roundCurrency(
+              Number(savingsMonthlyActivity.withdrawn_amount || 0) + amountValue
+            ),
           updated_at: nowIso,
         })
         .eq("account_id", sourceAccount.account_id)
@@ -204,8 +235,6 @@ export async function POST(req: Request) {
         );
       }
     }
-
-    const destBalance = Number(destAccount.balance || 0);
 
     let transactionType: "transfer" | "credit_payment" = "transfer";
     let description = "Account transfer";
@@ -244,7 +273,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const nextCreditBalance = outstandingBalance - amountValue;
+      const nextCreditBalance = roundCurrency(outstandingBalance - amountValue);
 
       const { error: updateCreditError } = await supabase
         .from("credit_accounts")
@@ -269,7 +298,7 @@ export async function POST(req: Request) {
       const { error: updateDestError } = await supabase
         .from("accounts")
         .update({
-          balance: destBalance + amountValue,
+          balance: roundCurrency(destBalance + amountValue),
           updated_at: nowIso,
         })
         .eq("account_id", destAccount.account_id);

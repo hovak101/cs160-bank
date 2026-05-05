@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 import { isDepositEligible } from "@/lib/banking/rules";
+import { roundCurrency } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +25,22 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const target_account_id = String(body.target_account_id ?? "").trim();
-    const amount = Number(body.amount ?? 0);
+    const parsedAmount = parseCurrencyInput(body.amount, {
+      fieldLabel: "CashBox withdrawal amount",
+    });
 
-    if (!target_account_id || !Number.isFinite(amount) || amount <= 0) {
+    if (!target_account_id) {
       return NextResponse.json(
-        { error: "Target account and valid amount are required." },
+        { error: "Target account is required." },
         { status: 400 }
       );
     }
+
+    if (!parsedAmount.ok) {
+      return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
+    }
+
+    const amount = parsedAmount.value;
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")
@@ -111,8 +121,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const newCashboxBalance = Number(cashbox.balance) - amount;
-    const newAccountBalance = Number(targetAccount.balance ?? 0) + amount;
+    const newCashboxBalance = roundCurrency(Number(cashbox.balance) - amount);
+    const newAccountBalance = roundCurrency(
+      Number(targetAccount.balance ?? 0) + amount
+    );
     const referenceNumber = generateReferenceNumber();
 
     const destinationLabel = `${

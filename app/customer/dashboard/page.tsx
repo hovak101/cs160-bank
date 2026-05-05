@@ -131,7 +131,7 @@ export default async function CustomerDashboardPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const displayName =
     [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||

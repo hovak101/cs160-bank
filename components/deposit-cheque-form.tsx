@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import {
   Upload,
@@ -8,6 +10,11 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+} from "@/lib/banking/amount";
 
 type Account = {
   account_id: string;
@@ -58,8 +65,14 @@ export function DepositChequeForm({ accounts }: { accounts: Account[] }) {
       return;
     }
 
-    if (!amount || Number(amount) <= 0) {
-      setError("Please enter a valid amount.");
+    const parsedAmount = parseCurrencyInput(amount, {
+      fieldLabel: "Amount",
+      max: MANUAL_DEPOSIT_LIMIT_USD,
+      maxErrorMessage: LARGE_DEPOSIT_SUPPORT_MESSAGE,
+    });
+
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.error);
       return;
     }
 
@@ -70,7 +83,7 @@ export function DepositChequeForm({ accounts }: { accounts: Account[] }) {
 
     const formData = new FormData();
     formData.append("account_id", selectedAccount);
-    formData.append("amount", amount);
+    formData.append("amount", String(parsedAmount.value));
     formData.append("cheque_image", file);
 
     startTransition(async () => {
@@ -106,12 +119,12 @@ export function DepositChequeForm({ accounts }: { accounts: Account[] }) {
         <p className="mt-2 text-slate-400">
           You need to open an account before depositing a cheque.
         </p>
-        <a
+        <Link
           href="/customer/accounts"
           className="mt-5 inline-flex rounded-xl bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300"
         >
           Go to Accounts
-        </a>
+        </Link>
       </div>
     );
   }
@@ -216,12 +229,15 @@ export function DepositChequeForm({ accounts }: { accounts: Account[] }) {
             Review the uploaded cheque image before submission.
           </p>
 
-          <div className="mt-4 flex min-h-[320px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950">
+          <div className="relative mt-4 flex min-h-[320px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950">
             {previewUrl ? (
-              <img
+              <Image
                 src={previewUrl}
                 alt="Cheque preview"
-                className="h-full w-full object-cover"
+                fill
+                unoptimized
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-cover"
               />
             ) : (
               <div className="px-6 text-center">

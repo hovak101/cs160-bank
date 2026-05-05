@@ -56,7 +56,7 @@ export default async function CustomerLoansPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const [checkingAccountsResult, creditAccountsResult, loansResult] = await Promise.all([
     supabase

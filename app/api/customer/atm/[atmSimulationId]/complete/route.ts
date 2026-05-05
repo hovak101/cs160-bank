@@ -9,6 +9,10 @@ import {
   getAtmAccountStatusErrorMessage,
 } from "@/lib/atm/demo";
 import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+} from "@/lib/banking/amount";
+import {
   computeCreditCashAdvanceFee,
   computeCreditMinimumPayment,
   getAccountTypeLabel,
@@ -23,6 +27,50 @@ import {
 import { recordBankIncomeTransactions } from "@/lib/banking/bank-income";
 
 export const dynamic = "force-dynamic";
+
+async function failPendingAtmSimulation(params: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  simulationId: string;
+  transactionId: string;
+  action: "deposit" | "withdraw";
+  atmName: string;
+  atmLocation: string;
+  reason: string;
+  status?: number;
+}) {
+  const nowIso = new Date().toISOString();
+  const failedDescription = buildStoredAtmTransactionDescription(
+    params.action,
+    params.atmName,
+    params.atmLocation,
+    "failed"
+  );
+
+  await params.supabase
+    .from("transactions")
+    .update({
+      status: "failed",
+      description: failedDescription,
+      executed_at: nowIso,
+    })
+    .eq("status", "pending")
+    .eq("transaction_id", params.transactionId);
+
+  await params.supabase
+    .from("atm_simulations")
+    .update({
+      status: "failed",
+      completed_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("status", "pending")
+    .eq("atm_simulation_id", params.simulationId);
+
+  return NextResponse.json(
+    { error: params.reason },
+    { status: params.status ?? 400 }
+  );
+}
 
 export async function POST(
   _request: Request,
@@ -94,6 +142,8 @@ export async function POST(
       );
     }
 
+    const action = simulation.action === "deposit" ? "deposit" : "withdraw";
+
     const { data: account, error: accountError } = await supabase
       .from("accounts")
       .select(
@@ -104,18 +154,31 @@ export async function POST(
       .single();
 
     if (accountError || !account) {
-      return NextResponse.json(
-        { error: "The selected account could not be found." },
-        { status: 404 }
-      );
+      return failPendingAtmSimulation({
+        supabase,
+        simulationId: simulation.atm_simulation_id,
+        transactionId: simulation.transaction_id,
+        action,
+        atmName: simulation.atm_name,
+        atmLocation: simulation.atm_location,
+        reason: "The selected account could not be found.",
+        status: 404,
+      });
     }
 
     const statusError = getAtmAccountStatusErrorMessage(account.status);
     if (statusError) {
-      return NextResponse.json({ error: statusError }, { status: 400 });
+      return failPendingAtmSimulation({
+        supabase,
+        simulationId: simulation.atm_simulation_id,
+        transactionId: simulation.transaction_id,
+        action,
+        atmName: simulation.atm_name,
+        atmLocation: simulation.atm_location,
+        reason: statusError,
+      });
     }
 
-    const action = simulation.action === "deposit" ? "deposit" : "withdraw";
     const amount = Number(simulation.amount || 0);
     const nowIso = new Date().toISOString();
     const completedDescription = buildStoredAtmTransactionDescription(
@@ -129,18 +192,40 @@ export async function POST(
       action
     );
     if (accountRestrictionMessage) {
-      return NextResponse.json(
-        { error: accountRestrictionMessage },
-        { status: 400 }
-      );
+      return failPendingAtmSimulation({
+        supabase,
+        simulationId: simulation.atm_simulation_id,
+        transactionId: simulation.transaction_id,
+        action,
+        atmName: simulation.atm_name,
+        atmLocation: simulation.atm_location,
+        reason: accountRestrictionMessage,
+      });
     }
 
     if (action === "deposit") {
+      if (amount > MANUAL_DEPOSIT_LIMIT_USD) {
+        return failPendingAtmSimulation({
+          supabase,
+          simulationId: simulation.atm_simulation_id,
+          transactionId: simulation.transaction_id,
+          action,
+          atmName: simulation.atm_name,
+          atmLocation: simulation.atm_location,
+          reason: LARGE_DEPOSIT_SUPPORT_MESSAGE,
+        });
+      }
+
       if (!canUseAtmDeposit(account.account_type)) {
-        return NextResponse.json(
-          { error: `${getAccountTypeLabel(account.account_type)} accounts cannot receive ATM deposits in this demo.` },
-          { status: 400 }
-        );
+        return failPendingAtmSimulation({
+          supabase,
+          simulationId: simulation.atm_simulation_id,
+          transactionId: simulation.transaction_id,
+          action,
+          atmName: simulation.atm_name,
+          atmLocation: simulation.atm_location,
+          reason: `${getAccountTypeLabel(account.account_type)} accounts cannot receive ATM deposits in this demo.`,
+        });
       }
 
       const nextBalance = roundCurrency(Number(account.balance || 0) + amount);
@@ -161,10 +246,15 @@ export async function POST(
       }
     } else {
       if (!canUseAtmWithdrawal(account.account_type)) {
-        return NextResponse.json(
-          { error: `${getAccountTypeLabel(account.account_type)} accounts cannot be used for ATM withdrawals in this demo.` },
-          { status: 400 }
-        );
+        return failPendingAtmSimulation({
+          supabase,
+          simulationId: simulation.atm_simulation_id,
+          transactionId: simulation.transaction_id,
+          action,
+          atmName: simulation.atm_name,
+          atmLocation: simulation.atm_location,
+          reason: `${getAccountTypeLabel(account.account_type)} accounts cannot be used for ATM withdrawals in this demo.`,
+        });
       }
 
       if (isCreditAccount(account.account_type)) {
@@ -177,10 +267,16 @@ export async function POST(
           .single();
 
         if (creditAccountError || !creditAccount) {
-          return NextResponse.json(
-            { error: "Credit account details not found." },
-            { status: 404 }
-          );
+          return failPendingAtmSimulation({
+            supabase,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason: "Credit account details not found.",
+            status: 404,
+          });
         }
 
         const feeAmount = computeCreditCashAdvanceFee(amount);
@@ -192,24 +288,30 @@ export async function POST(
         );
 
         if (amount > cashAdvanceRemaining) {
-          return NextResponse.json(
-            {
-              error: `Cash advance limit exceeded. You can withdraw up to $${cashAdvanceRemaining.toFixed(
-                2
-              )} right now.`,
-            },
-            { status: 400 }
-          );
+          return failPendingAtmSimulation({
+            supabase,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason: `Cash advance limit exceeded. You can withdraw up to $${cashAdvanceRemaining.toFixed(
+              2
+            )} right now.`,
+          });
         }
 
         if (amount + feeAmount > availableCredit) {
-          return NextResponse.json(
-            {
-              error:
-                "Insufficient available credit to cover the ATM cash advance and fee.",
-            },
-            { status: 400 }
-          );
+          return failPendingAtmSimulation({
+            supabase,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason:
+              "Insufficient available credit to cover the ATM cash advance and fee.",
+          });
         }
 
         const nextCurrentBalance =
@@ -263,10 +365,15 @@ export async function POST(
         const currentBalance = Number(account.balance || 0);
 
         if (amount > currentBalance) {
-          return NextResponse.json(
-            { error: "Insufficient funds. Withdrawal amount exceeds current balance." },
-            { status: 400 }
-          );
+          return failPendingAtmSimulation({
+            supabase,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason: "Insufficient funds. Withdrawal amount exceeds current balance.",
+          });
         }
 
         if (isSavingsAccount(account.account_type)) {
@@ -279,14 +386,17 @@ export async function POST(
             getRemainingSavingsWithdrawalAllowance(savingsMonthlyActivity);
 
           if (amount > remainingAllowance) {
-            return NextResponse.json(
-              {
-                error: `Savings accounts can only withdraw up to 10% of the monthly starting balance. Remaining allowance: $${remainingAllowance.toFixed(
-                  2
-                )}.`,
-              },
-              { status: 400 }
-            );
+            return failPendingAtmSimulation({
+              supabase,
+              simulationId: simulation.atm_simulation_id,
+              transactionId: simulation.transaction_id,
+              action,
+              atmName: simulation.atm_name,
+              atmLocation: simulation.atm_location,
+              reason: `Savings accounts can only withdraw up to 10% of the monthly starting balance. Remaining allowance: $${remainingAllowance.toFixed(
+                2
+              )}.`,
+            });
           }
 
           const { error: activityError } = await supabase

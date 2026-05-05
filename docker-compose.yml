@@ -1,0 +1,21 @@
+services:
+  app:
+    container_name: vitality-bank
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://example.supabase.co}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-sb_publishable_dummy}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-dummy-google-maps-key}
+        NEXT_PUBLIC_CRON_SECRET: ${NEXT_PUBLIC_CRON_SECRET:-dummy-cron-secret}
+        VERCEL_URL: ${VERCEL_URL:-localhost:3000}
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

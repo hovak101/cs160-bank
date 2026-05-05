@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Landmark, CheckCircle2 } from "lucide-react";
+import { getFriendlyAuthMessage } from "@/lib/auth/messages";
+import { MAX_EMAIL_LENGTH, validateEmailAddress } from "@/lib/auth/email";
 import {
   Card,
   CardContent,
@@ -33,15 +35,26 @@ export default function Page() {
       return;
     }
 
+    const validatedEmail = validateEmailAddress(email);
+    if (!validatedEmail.ok) {
+      setMessage(validatedEmail.error);
+      return;
+    }
+
     setLoading(true);
 
     const { error } = await supabase.auth.signUp({
-      email,
+      email: validatedEmail.value,
       password,
     });
 
     if (error) {
-      setMessage(error.message);
+      setMessage(
+        getFriendlyAuthMessage(
+          error.message,
+          "We could not create your account. Please try again."
+        )
+      );
       setLoading(false);
       return;
     }
@@ -125,6 +138,7 @@ export default function Page() {
                   <input
                     type="email"
                     placeholder="you@example.com"
+                    maxLength={MAX_EMAIL_LENGTH}
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

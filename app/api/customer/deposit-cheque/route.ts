@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+} from "@/lib/banking/amount";
+import { roundCurrency } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +35,11 @@ export async function POST(req: Request) {
     
     const formData = await req.formData();
     const accountId = String(formData.get("account_id") || "");
-    const amountValue = Number(formData.get("amount"));
+    const parsedAmount = parseCurrencyInput(formData.get("amount"), {
+      fieldLabel: "Amount",
+      max: MANUAL_DEPOSIT_LIMIT_USD,
+      maxErrorMessage: LARGE_DEPOSIT_SUPPORT_MESSAGE,
+    });
     const chequeImage = formData.get("cheque_image") as File | null;
 
     if (!chequeImage) {
@@ -46,12 +56,14 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+    if (!parsedAmount.ok) {
       return NextResponse.json(
-        { error: "Valid amount is required." },
+        { error: parsedAmount.error },
         { status: 400 }
       );
     }
+
+    const amountValue = parsedAmount.value;
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")
@@ -98,7 +110,7 @@ export async function POST(req: Request) {
     }
 
     const currentBalance = Number(account.balance || 0);
-    const newBalance = currentBalance + amountValue;
+    const newBalance = roundCurrency(currentBalance + amountValue);
 
     const { error: updateAccountError } = await supabase
       .from("accounts")
@@ -150,7 +162,7 @@ export async function POST(req: Request) {
 
     try {
       const buffer = await chequeImage.arrayBuffer();
-      const { error: uploadError, data: uploadData } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("cheques")
         .upload(fileName, new Uint8Array(buffer), {
           contentType: chequeImage.type,

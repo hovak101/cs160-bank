@@ -12,7 +12,6 @@ import {
 } from "@/lib/banking/rules";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Landmark } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -55,11 +54,27 @@ export default async function AccountsPage() {
     return <div className="p-10 text-center">Customer profile not found.</div>;
   }
 
-  const { data: accounts } = await supabase
+  const { data: rawAccounts } = await supabase
     .from("accounts")
     .select("*")
     .eq("customer_id", customer.customer_id)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
+
+  const accounts = (rawAccounts ?? []).sort((left, right) => {
+    const leftStatus = (left.status ?? "").toLowerCase();
+    const rightStatus = (right.status ?? "").toLowerCase();
+    const leftClosed = leftStatus === "closed";
+    const rightClosed = rightStatus === "closed";
+
+    if (leftClosed !== rightClosed) {
+      return leftClosed ? 1 : -1;
+    }
+
+    return (
+      new Date(right.created_at ?? 0).getTime() -
+      new Date(left.created_at ?? 0).getTime()
+    );
+  });
 
   const creditAccountIds =
     (accounts ?? [])
@@ -132,7 +147,7 @@ export default async function AccountsPage() {
       </section>
       
 
-      {!accounts || accounts.length === 0 ? (
+      {accounts.length === 0 ? (
         <Card className="border-white/10 bg-[#0f172a] p-8 text-center text-slate-300">
           No banking products yet. Open your first checking, savings, or credit account to get started.
         </Card>

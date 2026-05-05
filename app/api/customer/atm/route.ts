@@ -27,6 +27,11 @@ import {
   isValidSecurityCodeFormat,
   normalizeSecurityCode,
 } from "@/lib/banking/security-code";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+} from "@/lib/banking/amount";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +74,6 @@ export async function POST(request: Request) {
     const providedAtmName = String(body.atm_name ?? "").trim();
     const providedAtmLocation = String(body.atm_location ?? "").trim();
     const action = String(body.action ?? "").trim().toLowerCase() as AtmAction;
-    const amount = Number(body.amount ?? 0);
     const securityCode = normalizeSecurityCode(body.security_code);
 
     if (!atmId) {
@@ -86,6 +90,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const parsedAmount = parseCurrencyInput(body.amount, {
+      fieldLabel: "Amount",
+      max: action === "deposit" ? MANUAL_DEPOSIT_LIMIT_USD : undefined,
+      maxErrorMessage:
+        action === "deposit" ? LARGE_DEPOSIT_SUPPORT_MESSAGE : undefined,
+    });
+
     if (!accountId) {
       return NextResponse.json(
         { error: "Please choose one of your accounts." },
@@ -93,12 +104,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!parsedAmount.ok) {
       return NextResponse.json(
-        { error: "Amount must be greater than 0." },
+        { error: parsedAmount.error },
         { status: 400 }
       );
     }
+
+    const amount = parsedAmount.value;
 
     let atmName = providedAtmName;
     let atmLocation = providedAtmLocation;

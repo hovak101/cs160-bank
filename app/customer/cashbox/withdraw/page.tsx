@@ -30,7 +30,7 @@ export default async function CashBoxWithdrawPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   let { data: cashbox } = await supabase
     .from("cashboxes")

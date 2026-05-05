@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/require-role";
 
 type ManagerRow = {
@@ -16,15 +15,14 @@ type ManagerRow = {
 
 export async function GET(req: NextRequest) {
   try {
-        const auth = await requireRole(["admin", "manager"]);
-        if (!auth.ok) return auth.response;
-        const { supabase } = auth;
+    const auth = await requireRole(["admin"]);
+    if (!auth.ok) return auth.response;
+    const { supabase } = auth;
     try {
-      const supabase = await createClient();
       const q = (req.nextUrl.searchParams.get("q") || "").trim();
 
       // First, fetch all managers with their user_ids
-      let query = supabase
+      const query = supabase
         .from("managers")
         .select(`
           manager_id,
@@ -44,7 +42,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Get all user_ids from managers
-      let userIds = (managers ?? []).map(m => m.user_id);
+      const userIds = (managers ?? []).map(m => m.user_id);
       
       // If search query, fetch users and filter by email/name match
       let filteredManagers = managers ?? [];
@@ -73,7 +71,7 @@ export async function GET(req: NextRequest) {
       
       // Fetch user emails for filtered managers
       const filteredUserIds = filteredManagers.map(m => m.user_id);
-      let emails: Record<string, string | null> = {};
+      const emails: Record<string, string | null> = {};
       if (filteredUserIds.length > 0) {
         const { data: users } = await supabase
           .from("users")

@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   LogOut,
   Save,
-  CheckCircle2,
   Loader2,
   Globe,
   ArrowUpRight,
@@ -26,6 +25,21 @@ interface UserData {
   transaction_alerts?: boolean;
   device_alerts?: boolean;
   summary_alerts?: boolean;
+}
+
+type NotificationPreferenceKey =
+  | "transaction_alerts"
+  | "device_alerts"
+  | "summary_alerts";
+
+const notificationItems: { id: NotificationPreferenceKey; label: string }[] = [
+  { id: "transaction_alerts", label: "Transaction Alerts" },
+  { id: "device_alerts", label: "New Device Login" },
+  { id: "summary_alerts", label: "Weekly Financial Summary" },
+];
+
+function getErrorMessage(error: unknown, fallback = "Something went wrong.") {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export default function SettingsForm({ initialData }: { initialData: UserData }) {
@@ -71,8 +85,8 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
       setShowSuccess(true);
       router.refresh();
       setTimeout(() => setShowSuccess(false), 3000);
-    } catch (error: any) {
-      alert("Error: " + error.message);
+    } catch (error: unknown) {
+      alert(`Error: ${getErrorMessage(error)}`);
     } finally {
       setIsSaving(false);
     }
@@ -103,8 +117,8 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
 
       setPasswords({ current: "", new: "" });
       alert("Password updated successfully!");
-    } catch (error: any) {
-      alert(error.message);
+    } catch (error: unknown) {
+      alert(getErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
@@ -118,8 +132,8 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
     router.push("/auth/login"); 
     
     router.refresh();
-  } catch (error: any) {
-    console.error("Sign out error:", error.message);
+  } catch (error: unknown) {
+    console.error("Sign out error:", getErrorMessage(error));
   }
 };
 
@@ -244,11 +258,7 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
           {activeTab === "notifications" && (
             <section className="rounded-2xl border border-white/10 bg-[#0f172a] p-6 space-y-6">
               <h3 className="text-lg font-semibold text-white">Alert Preferences</h3>
-              {[
-                { id: "transaction_alerts", label: "Transaction Alerts" },
-                { id: "device_alerts", label: "New Device Login" },
-                { id: "summary_alerts", label: "Weekly Financial Summary" },
-              ].map((item) => (
+              {notificationItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                   <span className="text-sm text-slate-300">{item.label}</span>
 
@@ -256,18 +266,18 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
                   <button
                     onClick={() => setFormData({
                       ...formData,
-                      [item.id]: !formData[item.id as keyof UserData]
+                      [item.id]: !Boolean(formData[item.id])
                     })}
                     className={cn(
                       "w-10 h-5 rounded-full relative transition-all duration-200",
-                      formData[item.id as keyof UserData]
+                      formData[item.id]
                         ? "bg-cyan-400 shadow-[0_0_10px_-2px_#22d3ee]"
                         : "bg-slate-700"
                     )}
                   >
                     <div className={cn(
                       "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-                      formData[item.id as keyof UserData] ? "right-1" : "left-1"
+                      formData[item.id] ? "right-1" : "left-1"
                     )} />
                   </button>
                 </div>

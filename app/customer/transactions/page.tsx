@@ -47,7 +47,7 @@ export default async function CustomerTransactionsPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const currentPhoneDigits = normalizePhone(customer.phone_number);
 

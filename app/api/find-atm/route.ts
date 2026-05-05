@@ -7,6 +7,13 @@ export async function GET(request: Request) {
   const query =
     searchParams.get("query")?.trim() || searchParams.get("zip")?.trim() || "";
 
+  if (query.length > 200) {
+    return NextResponse.json(
+      { error: "Address is too long." },
+      { status: 400 }
+    );
+  }
+
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "Google Maps API key not configured" }, { status: 500 });
@@ -33,6 +40,23 @@ export async function GET(request: Request) {
     );
   }
 
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return NextResponse.json(
+      { error: "Latitude and longitude must be valid coordinates." },
+      { status: 400 }
+    );
+  }
+
   const keyword = encodeURIComponent("Chase ATM");
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=12000&type=atm&keyword=${keyword}&key=${apiKey}`;
 
@@ -49,7 +73,7 @@ export async function GET(request: Request) {
     .map((place) => {
       const placeLat = Number(place.geometry?.location?.lat ?? 0);
       const placeLng = Number(place.geometry?.location?.lng ?? 0);
-      const distanceMiles = haversine(Number(lat), Number(lng), placeLat, placeLng);
+      const distanceMiles = haversine(latitude, longitude, placeLat, placeLng);
 
       return {
         atm_id:
@@ -72,8 +96,10 @@ export async function GET(request: Request) {
       lng: place.lng,
       distance: place.distance,
     }));
-
-  return NextResponse.json({ results, location: { lat: Number(lat), lng: Number(lng) } });
+  return NextResponse.json({
+    results,
+    location: { lat: latitude, lng: longitude },
+  });
 }
 
 function isChaseAtmResult(place: GooglePlaceResult) {

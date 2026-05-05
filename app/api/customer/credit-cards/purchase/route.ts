@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { computeCreditMinimumPayment, isCreditAccount } from "@/lib/banking/rules";
+import {
+  computeCreditMinimumPayment,
+  isCreditAccount,
+  roundCurrency,
+} from "@/lib/banking/rules";
 import { verifySecurityCode } from "@/lib/banking/security-code.server";
 import {
   isValidSecurityCodeFormat,
   normalizeSecurityCode,
 } from "@/lib/banking/security-code";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 
 export const dynamic = "force-dynamic";
 
@@ -27,15 +32,26 @@ export async function POST(request: Request) {
     const accountId = String(body.account_id ?? "").trim();
     const merchant = String(body.merchant ?? "").trim();
     const category = String(body.category ?? "").trim();
-    const amount = Number(body.amount ?? 0);
+    const parsedAmount = parseCurrencyInput(body.amount, {
+      fieldLabel: "Amount",
+    });
     const securityCode = normalizeSecurityCode(body.security_code);
 
-    if (!accountId || !merchant || !Number.isFinite(amount) || amount <= 0) {
+    if (!accountId || !merchant) {
       return NextResponse.json(
         { error: "Credit account, merchant, and valid amount are required." },
         { status: 400 }
       );
     }
+
+    if (!parsedAmount.ok) {
+      return NextResponse.json(
+        { error: parsedAmount.error },
+        { status: 400 }
+      );
+    }
+
+    const amount = parsedAmount.value;
 
     if (!isValidSecurityCodeFormat(securityCode)) {
       return NextResponse.json(
@@ -134,11 +150,16 @@ export async function POST(request: Request) {
     }
 
     const rewardsRate = Number(creditCard.rewards_rate ?? 0);
-    const rewardsEarned = amount * rewardsRate;
-    const nextBalance = Number(creditAccount.current_balance || 0) + amount;
-    const nextStatementBalance =
-      Number(creditAccount.statement_balance || 0) + amount;
-    const nextRewards = Number(creditAccount.rewards_points || 0) + rewardsEarned;
+    const rewardsEarned = roundCurrency(amount * rewardsRate);
+    const nextBalance = roundCurrency(
+      Number(creditAccount.current_balance || 0) + amount
+    );
+    const nextStatementBalance = roundCurrency(
+      Number(creditAccount.statement_balance || 0) + amount
+    );
+    const nextRewards = roundCurrency(
+      Number(creditAccount.rewards_points || 0) + rewardsEarned
+    );
     const nowIso = new Date().toISOString();
 
     const { error: updateCreditError } = await supabase

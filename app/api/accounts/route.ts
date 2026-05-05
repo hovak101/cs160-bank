@@ -10,6 +10,56 @@ import {
 
 export const dynamic = "force-dynamic";
 
+export async function GET() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (userData?.role !== "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { data: customer, error: customerError } = await supabase
+    .from("customers")
+    .select("customer_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (customerError || !customer) {
+    return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  }
+
+  const { data: accounts, error: accountsError } = await supabase
+    .from("accounts")
+    .select(
+      "account_id, account_name, account_number, account_type, balance, currency, status"
+    )
+    .eq("customer_id", customer.customer_id)
+    .order("created_at", { ascending: true });
+
+  if (accountsError) {
+    return NextResponse.json(
+      { error: accountsError.message || "Failed to load accounts." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ accounts: accounts ?? [] });
+}
+
 export async function POST(request: Request) {
     const supabase = await createClient();
     

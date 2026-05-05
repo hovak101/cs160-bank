@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+type BillScheduleOwner = {
+  account_id: string;
+};
+
 // cancels a bill payment schedule
 export async function DELETE(request: Request, { params }: { params: Promise<{ scheduleId: string }> }) {
   const supabase = await createClient();
 
-  let { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     return NextResponse.json({ error: "Not logged in" }, { status: 401 });
@@ -22,7 +26,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ s
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let { scheduleId } = await params;
+  const { scheduleId } = await params;
 
   // Verify ownership before cancelling + fetch schedule + confirm source account belongs to this customer
   const { data: customerData } = await supabase
@@ -36,10 +40,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ s
   }
 
   const { data: schedule } = await supabaseAdmin
-    .from("bill_schedules" as any)
+    .from("bill_schedules")
     .select("account_id")
     .eq("schedule_id", scheduleId)
-    .single();
+    .single<BillScheduleOwner>();
 
   if (!schedule) {
     return NextResponse.json({ error: "Schedule not found." }, { status: 404 });
@@ -49,7 +53,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ s
   const { data: ownerCheck } = await supabase
     .from("accounts")
     .select("account_id")
-    .eq("account_id", (schedule as any).account_id)
+    .eq("account_id", schedule.account_id)
     .eq("customer_id", customerData.customer_id)
     .single();
 
@@ -59,7 +63,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ s
 
   // set the status to cancelled in the database
   const { error: updateError } = await supabaseAdmin
-    .from("bill_schedules" as any)
+    .from("bill_schedules")
     .update({ status: "cancelled" })
     .eq("schedule_id", scheduleId);
 

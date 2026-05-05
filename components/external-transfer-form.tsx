@@ -19,6 +19,11 @@ import {
   isDepositEligible,
   isSavingsAccount,
 } from "@/lib/banking/rules";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+} from "@/lib/banking/amount";
 
 type Account = {
   account_id: string;
@@ -38,6 +43,8 @@ type LinkedExternalAccount = {
   plaid_account_subtype: string;
   status: string;
   created_at: string;
+  available_balance?: number | null;
+  current_balance?: number | null;
 };
 
 type PlaidLinkMetadata = {
@@ -111,6 +118,13 @@ export function ExternalTransferForm({
 
   const availableBalance = Number(selectedAccount?.balance ?? 0);
   const currency = selectedAccount?.currency ?? "USD";
+  const parsedAmount = parseCurrencyInput(amount, {
+    fieldLabel: "Transfer amount",
+    max: direction === "inbound" ? MANUAL_DEPOSIT_LIMIT_USD : undefined,
+    maxErrorMessage:
+      direction === "inbound" ? LARGE_DEPOSIT_SUPPORT_MESSAGE : undefined,
+  });
+  const numericAmount = parsedAmount.ok ? parsedAmount.value : 0;
 
   useEffect(() => {
     void loadLinkedAccounts();
@@ -290,8 +304,6 @@ export function ExternalTransferForm({
     setError("");
     setMessage("");
 
-    const numericAmount = Number(amount);
-
     if (!internalAccountId) {
       setError(
         direction === "inbound"
@@ -306,8 +318,8 @@ export function ExternalTransferForm({
       return;
     }
 
-    if (!amount || numericAmount <= 0) {
-      setError("Please enter a valid amount.");
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.error);
       return;
     }
 
@@ -484,8 +496,8 @@ export function ExternalTransferForm({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-slate-400">Linked Bank</p>
-                <p className="mt-1 text-base font-semibold text-white">
-                  {selectedLinkedAccount
+              <p className="mt-1 text-base font-semibold text-white">
+                {selectedLinkedAccount
                     ? `${selectedLinkedAccount.institution_name} - ${selectedLinkedAccount.plaid_account_name}${
                         selectedLinkedAccount.plaid_account_mask
                           ? ` ****${selectedLinkedAccount.plaid_account_mask}`
@@ -494,7 +506,13 @@ export function ExternalTransferForm({
                     : isLoadingAccounts
                     ? "Loading linked banks..."
                     : "No saved bank linked yet"}
+              </p>
+              {typeof selectedLinkedAccount?.available_balance === "number" ? (
+                <p className="mt-1 text-sm text-slate-400">
+                  Available external balance:{" "}
+                  {formatCurrency(selectedLinkedAccount.available_balance)}
                 </p>
+              ) : null}
               </div>
 
               <div className="flex items-center gap-2">

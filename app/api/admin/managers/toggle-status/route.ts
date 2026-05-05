@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-
-type ManagerRow = {
-  manager_id: string;
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  employee_id: string | null;
-  created_at: string | null;
-  is_active: boolean | null;
-};
+import { requireRole } from "@/lib/auth/require-role";
 
 export async function PATCH(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    const auth = await requireRole(["admin"]);
+    if (!auth.ok) return auth.response;
+    const { supabase } = auth;
     const body = await req.json();
     const { manager_id, action } = body;
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { parseCurrencyInput } from "@/lib/banking/amount";
+import { roundCurrency } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +29,22 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const phone_number = normalizePhone(body.phone_number);
-    const amount = Number(body.amount ?? 0);
+    const parsedAmount = parseCurrencyInput(body.amount, {
+      fieldLabel: "CashBox send amount",
+    });
 
-    if (!phone_number || !Number.isFinite(amount) || amount <= 0) {
+    if (!phone_number) {
       return NextResponse.json(
-        { error: "Phone number and valid amount are required." },
+        { error: "Phone number is required." },
         { status: 400 }
       );
     }
+
+    if (!parsedAmount.ok) {
+      return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
+    }
+
+    const amount = parsedAmount.value;
 
     const { data: senderCustomer, error: senderCustomerError } =
       await supabaseAdmin
@@ -52,7 +62,7 @@ export async function POST(request: Request) {
 
     const senderPhone = normalizePhone(senderCustomer.phone_number);
 
-    let { data: senderCashbox } = await supabaseAdmin
+    const { data: senderCashbox } = await supabaseAdmin
       .from("cashboxes")
       .select("cashbox_id, balance")
       .eq("customer_id", senderCustomer.customer_id)
@@ -133,8 +143,10 @@ export async function POST(request: Request) {
       receiverCashbox = createdCashbox;
     }
 
-    const newSenderBalance = Number(senderCashbox.balance) - amount;
-    const newReceiverBalance = Number(receiverCashbox.balance ?? 0) + amount;
+    const newSenderBalance = roundCurrency(Number(senderCashbox.balance) - amount);
+    const newReceiverBalance = roundCurrency(
+      Number(receiverCashbox.balance ?? 0) + amount
+    );
     const referenceNumber = generateReferenceNumber();
 
     const { error: updateSenderError } = await supabaseAdmin

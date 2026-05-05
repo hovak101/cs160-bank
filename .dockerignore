@@ -1,0 +1,13 @@
+.git
+.gitignore
+.next
+.vscode
+node_modules
+npm-debug.log*
+.env
+.env.*
+coverage
+Dockerfile*
+README.md
+supabase/.temp
+tsconfig.tsbuildinfo

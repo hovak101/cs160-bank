@@ -26,6 +26,21 @@ export default async function CustomerLayout({
 
   if (data?.role !== "customer") redirect("/auth/login");
 
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("customer_id, first_name, last_name")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const needsOnboarding =
+    !customer ||
+    !customer.first_name?.trim() ||
+    !customer.last_name?.trim();
+
+  if (needsOnboarding) {
+    redirect("/auth/onboarding");
+  }
+
   return (
     <IdleLogoutProvider>
       <DashboardLayout>{children}</DashboardLayout>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { encryptText } from "@/lib/security/encryption";
+import { decryptText } from "@/lib/security/encryption";
 import {
   exchangePlaidPublicToken,
   getPlaidAccounts,
@@ -21,7 +22,7 @@ export async function GET() {
     const { data, error } = await supabaseAdmin
       .from("plaid_linked_accounts")
       .select(
-        "linked_account_id, institution_name, plaid_account_name, plaid_account_mask, plaid_account_subtype, status, created_at"
+        "linked_account_id, plaid_account_id, encrypted_access_token, access_token_iv, access_token_auth_tag, institution_name, plaid_account_name, plaid_account_mask, plaid_account_subtype, status, created_at"
       )
       .eq("customer_id", customer.customerId)
       .eq("status", "active")
@@ -34,17 +35,44 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({
-      accounts: (data ?? []).map((row: Record<string, unknown>) => ({
-        linked_account_id: String(row.linked_account_id || ""),
-        institution_name: String(row.institution_name || "External bank"),
-        plaid_account_name: String(row.plaid_account_name || "Linked account"),
-        plaid_account_mask: String(row.plaid_account_mask || ""),
-        plaid_account_subtype: String(row.plaid_account_subtype || ""),
-        status: String(row.status || "active"),
-        created_at: String(row.created_at || ""),
-      })),
-    });
+    const accounts = await Promise.all(
+      (data ?? []).map(async (row: Record<string, unknown>) => {
+        let availableBalance: number | null = null;
+        let currentBalance: number | null = null;
+
+        try {
+          const accessToken = decryptText({
+            ciphertext: String(row.encrypted_access_token || ""),
+            iv: String(row.access_token_iv || ""),
+            authTag: String(row.access_token_auth_tag || ""),
+          });
+          const plaidAccounts = await getPlaidAccounts(accessToken);
+          const matchedAccount = plaidAccounts.accounts?.find(
+            (account) => account.account_id === row.plaid_account_id
+          );
+
+          availableBalance =
+            matchedAccount?.balances?.available ?? matchedAccount?.balances?.current ?? null;
+          currentBalance = matchedAccount?.balances?.current ?? null;
+        } catch (lookupError) {
+          console.error("plaid linked account balance lookup error:", lookupError);
+        }
+
+        return {
+          linked_account_id: String(row.linked_account_id || ""),
+          institution_name: String(row.institution_name || "External bank"),
+          plaid_account_name: String(row.plaid_account_name || "Linked account"),
+          plaid_account_mask: String(row.plaid_account_mask || ""),
+          plaid_account_subtype: String(row.plaid_account_subtype || ""),
+          status: String(row.status || "active"),
+          created_at: String(row.created_at || ""),
+          available_balance: availableBalance,
+          current_balance: currentBalance,
+        };
+      })
+    );
+
+    return NextResponse.json({ accounts });
   } catch (error) {
     console.error("plaid linked accounts get error:", error);
     return NextResponse.json(

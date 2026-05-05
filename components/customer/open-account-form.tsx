@@ -94,7 +94,7 @@ export function OpenAccountForm() {
 
       {isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative animate-in fade-in zoom-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-8 text-slate-900 shadow-2xl animate-in fade-in zoom-in duration-200">
             <button
               onClick={() => setIsOpen(false)}
               className="absolute right-6 top-6 text-slate-400 hover:text-slate-600"
@@ -115,7 +115,7 @@ export function OpenAccountForm() {
                 <input
                   name="account_name"
                   placeholder="e.g. Daily Bills, Emergency Savings, Travel Card"
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-900 outline-none placeholder:text-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500"
                   required
                 />
               </div>
@@ -135,7 +135,7 @@ export function OpenAccountForm() {
                       setSecurityCode("");
                     }
                   }}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500"
                   required
                 >
                   {ACCOUNT_OPTIONS.map((option) => (
@@ -173,7 +173,7 @@ export function OpenAccountForm() {
                         setFormError("");
                       }}
                       placeholder="3-digit code"
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
+                      className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-900 outline-none placeholder:text-slate-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500"
                       required
                     />
                     <p className="mt-2 text-xs leading-5 text-slate-500">

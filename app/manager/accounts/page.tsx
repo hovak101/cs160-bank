@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 
-type AccountStatus = "active" | "frozen" | "closed";
-
 type AccountItem = {
   account_id: string;
   account_name: string;

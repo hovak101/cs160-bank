@@ -6,6 +6,13 @@ import {
   getRemainingSavingsWithdrawalAllowance,
 } from "@/lib/banking/server";
 import {
+  MAX_ACCOUNT_BALANCE,
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+  willExceedMaxAccountBalance,
+} from "@/lib/banking/amount";
+import {
   isDepositEligible,
   isSavingsAccount,
   roundCurrency,
@@ -14,6 +21,7 @@ import {
   PlaidApiError,
   createPlaidTransfer,
   createPlaidTransferAuthorization,
+  getPlaidAccounts,
   isSandboxPlaid,
 } from "@/lib/plaid/server";
 import { decryptText } from "@/lib/security/encryption";
@@ -42,14 +50,19 @@ export async function POST(req: Request) {
 
     const direction = String(formData.get("direction") || "") as Direction;
     const internalAccountId = String(formData.get("internal_account_id") || "");
-    const amountValue = roundCurrency(Number(formData.get("amount") || 0));
-
     if (direction !== "inbound" && direction !== "outbound") {
       return NextResponse.json(
         { error: "Transfer direction is required." },
         { status: 400 }
       );
     }
+
+    const parsedAmount = parseCurrencyInput(formData.get("amount"), {
+      fieldLabel: "Transfer amount",
+      max: direction === "inbound" ? MANUAL_DEPOSIT_LIMIT_USD : undefined,
+      maxErrorMessage:
+        direction === "inbound" ? LARGE_DEPOSIT_SUPPORT_MESSAGE : undefined,
+    });
 
     if (!internalAccountId) {
       return NextResponse.json(
@@ -65,12 +78,11 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!amountValue || amountValue <= 0) {
-      return NextResponse.json(
-        { error: "Enter a valid transfer amount." },
-        { status: 400 }
-      );
+    if (!parsedAmount.ok) {
+      return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
     }
+
+    const amountValue = parsedAmount.value;
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")
@@ -150,6 +162,24 @@ export async function POST(req: Request) {
 
     const currentBalance = roundCurrency(Number(account.balance || 0));
 
+    if (
+      direction === "inbound" &&
+      willExceedMaxAccountBalance(currentBalance, amountValue)
+    ) {
+      return NextResponse.json(
+        {
+          error: `Destination account cannot exceed ${new Intl.NumberFormat(
+            "en-US",
+            {
+              style: "currency",
+              currency: "USD",
+            }
+          ).format(MAX_ACCOUNT_BALANCE)}.`,
+        },
+        { status: 400 }
+      );
+    }
+
     let savingsMonthlyActivity:
       | Awaited<ReturnType<typeof getOrCreateSavingsMonthlyActivity>>
       | null = null;
@@ -198,15 +228,42 @@ export async function POST(req: Request) {
             String(linkedAccount.plaid_account_mask || "")
           )}`;
 
+    const plaidAccessToken = decryptText({
+      ciphertext: String(linkedAccount.encrypted_access_token || ""),
+      iv: String(linkedAccount.access_token_iv || ""),
+      authTag: String(linkedAccount.access_token_auth_tag || ""),
+    });
+
+    const plaidAccounts = await getPlaidAccounts(plaidAccessToken);
+    const matchedExternalAccount = plaidAccounts.accounts?.find(
+      (plaidAccount) =>
+        plaidAccount.account_id === String(linkedAccount.plaid_account_id || "")
+    );
+    const externalAvailableBalance =
+      matchedExternalAccount?.balances?.available ??
+      matchedExternalAccount?.balances?.current ??
+      null;
+
+    if (
+      direction === "inbound" &&
+      typeof externalAvailableBalance === "number" &&
+      amountValue > externalAvailableBalance
+    ) {
+      return NextResponse.json(
+        {
+          error: `Amount exceeds available external balance (${externalAvailableBalance.toFixed(
+            2
+          )}).`,
+        },
+        { status: 400 }
+      );
+    }
+
     if (isSandboxPlaid()) {
-      // In Plaid Sandbox, a Link-connected external account does not expose a
-      // reliable writable balance surface for keeping Transfer authorization and
-      // Plaid Ledger in sync with our demo bank balances. For a stable demo,
-      // mirror the selected bank account balance as the external account's
-      // available balance for outbound transfers and simulate success entirely
-      // within the app. Inbound transfers stay effectively unlimited so demo
-      // deposits are not blocked by Plaid sandbox balance constraints.
-      const mirroredExternalBalance = currentBalance;
+      const mirroredExternalBalance =
+        typeof externalAvailableBalance === "number"
+          ? roundCurrency(externalAvailableBalance)
+          : currentBalance;
 
       if (direction === "outbound" && amountValue > mirroredExternalBalance) {
         return NextResponse.json(
@@ -231,12 +288,6 @@ export async function POST(req: Request) {
         customerId: customer.customer_id,
       });
     }
-
-    const plaidAccessToken = decryptText({
-      ciphertext: String(linkedAccount.encrypted_access_token || ""),
-      iv: String(linkedAccount.access_token_iv || ""),
-      authTag: String(linkedAccount.access_token_auth_tag || ""),
-    });
 
     const authorization = await createPlaidTransferAuthorization({
       accessToken: plaidAccessToken,
@@ -379,8 +430,10 @@ async function finalizeExternalTransfer(params: {
       .from("savings_monthly_activity")
       .update({
         withdrawn_amount:
-          Number(params.savingsMonthlyActivity.withdrawn_amount || 0) +
-          params.amountValue,
+          roundCurrency(
+            Number(params.savingsMonthlyActivity.withdrawn_amount || 0) +
+              params.amountValue
+          ),
         updated_at: nowIso,
       })
       .eq("account_id", params.accountId)

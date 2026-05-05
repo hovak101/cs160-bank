@@ -39,6 +39,7 @@ export async function ManagerDashboardStats() {
     { data: currentTxData },
     { data: previousTxData },
     { data: sixMonthTxData },
+    { count: completedTransactionCount },
   ] = await Promise.all([
     supabase.from("customers").select("customer_id"),
     supabase.from("accounts").select("account_id, balance, account_type"),
@@ -58,6 +59,12 @@ export async function ManagerDashboardStats() {
       .from("transactions")
       .select("amount, transaction_type, status, executed_at")
       .gte("executed_at", sixMonthStart.toISOString())
+      .lt("executed_at", nextMonthStart.toISOString())
+      .eq("status", "completed"),
+    supabase
+      .from("transactions")
+      .select("*", { count: "exact", head: true })
+      .gte("executed_at", currentMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
       .eq("status", "completed"),
   ]);
@@ -99,8 +106,6 @@ export async function ManagerDashboardStats() {
 
   const monthlyBars = buildMonthlySeries(sixMonthTx);
   const accountMix = buildAccountMix(accounts);
-
-  const completedTransactionCount = currentTx.length;
 
   return (
     <div className="space-y-6">
@@ -168,7 +173,7 @@ export async function ManagerDashboardStats() {
                 growth >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
-              {growth >= 0 ? "↑" : "↓"} {Math.abs(growth).toFixed(1)}% vs last month
+              {growth >= 0 ? "+" : "-"}{Math.abs(growth).toFixed(1)}% vs last month
             </p>
             <p className="mt-1 text-xs text-slate-500">
               Last month volume: {formatCurrency(previousVolume)}
@@ -285,7 +290,7 @@ export async function ManagerDashboardStats() {
 
         <InsightCard
           title="Completed Transactions"
-          value={String(completedTransactionCount)}
+          value={formatCountNumber(completedTransactionCount ?? 0)}
           subtitle="Completed this month"
           icon={<CheckCircle2 className="h-5 w-5 text-cyan-400" />}
         />
@@ -315,9 +320,11 @@ function StatCard({
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#0f172a] p-6 shadow-xl">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm text-slate-400">{title}</p>
-          <h3 className="mt-3 text-4xl font-bold text-white">{value}</h3>
+          <h3 className="mt-3 overflow-hidden text-[clamp(1.75rem,4vw,2.25rem)] font-bold text-white break-words">
+            {value}
+          </h3>
           <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
         </div>
         <div className="rounded-2xl bg-cyan-400/10 p-3">{icon}</div>
@@ -340,9 +347,11 @@ function InsightCard({
   return (
     <div className="rounded-[28px] border border-white/10 bg-[#0f172a] p-6 shadow-xl">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm text-slate-400">{title}</p>
-          <h4 className="mt-3 text-3xl font-bold text-white">{value}</h4>
+          <h4 className="mt-3 overflow-hidden text-[clamp(1.5rem,3.6vw,1.875rem)] font-bold text-white break-words">
+            {value}
+          </h4>
           <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
         </div>
         <div className="rounded-2xl bg-cyan-400/10 p-3">{icon}</div>
@@ -493,4 +502,10 @@ function formatCurrency(amount: number) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(Number(amount || 0));
+}
+
+function formatCountNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 }

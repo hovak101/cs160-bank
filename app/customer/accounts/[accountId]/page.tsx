@@ -118,7 +118,7 @@ export default async function AccountDetailPage({ params }: PageProps) {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const { data: accountData } = await supabase
     .from("accounts")

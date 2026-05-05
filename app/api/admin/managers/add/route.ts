@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/require-role";
-
-type ManagerItem = {
-  manager_id: string;
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  employee_id: string | null;
-  created_at: string | null;
-  is_active: boolean | null;
-};
 
 function generateUniqueEmployeeId(): string {
   return String(Math.floor(Math.random() * 90000000) + 10000000);
@@ -19,11 +8,10 @@ function generateUniqueEmployeeId(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireRole(["admin", "manager"]);
+    const auth = await requireRole(["admin"]);
     if (!auth.ok) return auth.response;
     const { supabase } = auth;
     try {
-      const supabase = await createClient();
       const body = await req.json();
       const { email, first_name, last_name } = body;
 
