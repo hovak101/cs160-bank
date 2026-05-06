@@ -62,25 +62,27 @@ export default function SettingsForm({ initialData }: { initialData: UserData })
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
       const nameParts = formData.name.trim().split(/\s+/);
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
 
-      const { error } = await supabase
-        .from("customers")
-        .update({
+      const response = await fetch("/api/customer/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           first_name: firstName,
           last_name: lastName,
-          transaction_alerts: formData.transaction_alerts,
-          device_alerts: formData.device_alerts,
-          summary_alerts: formData.summary_alerts,
-        })
-        .eq("user_id", user.id);
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(payload?.error || "Failed to update profile.");
+      }
 
       setShowSuccess(true);
       router.refresh();

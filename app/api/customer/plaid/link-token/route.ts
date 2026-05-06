@@ -38,6 +38,7 @@ export async function POST() {
     const plaid = await createPlaidLinkToken({
       clientUserId: user.id,
       legalName,
+      webhookUrl: resolvePlaidWebhookUrl(),
     });
 
     return NextResponse.json({
@@ -63,4 +64,18 @@ export async function POST() {
       { status: 500 }
     );
   }
+}
+
+function resolvePlaidWebhookUrl() {
+  const explicitUrl = process.env.PLAID_WEBHOOK_URL?.trim();
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) {
+    return `https://${vercelUrl}/public/plaid-webhook`;
+  }
+
+  return undefined;
 }

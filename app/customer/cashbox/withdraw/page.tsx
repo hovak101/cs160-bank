@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CashboxWithdrawForm from "@/components/customer/cashbox-withdraw-form";
+import { getOrCreateCashboxForCustomer } from "@/lib/banking/cashbox";
 import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
@@ -32,28 +33,7 @@ export default async function CashBoxWithdrawPage() {
 
   if (!customer) redirect("/auth/onboarding");
 
-  let { data: cashbox } = await supabase
-    .from("cashboxes")
-    .select("cashbox_id, balance")
-    .eq("customer_id", customer.customer_id)
-    .maybeSingle();
-
-  if (!cashbox) {
-    const { data: createdCashbox, error: createCashboxError } = await supabase
-      .from("cashboxes")
-      .insert({
-        customer_id: customer.customer_id,
-        balance: 0,
-      })
-      .select("cashbox_id, balance")
-      .single();
-
-    if (createCashboxError) {
-      throw new Error(createCashboxError.message);
-    }
-
-    cashbox = createdCashbox;
-  }
+  const cashbox = await getOrCreateCashboxForCustomer(customer.customer_id);
 
   const cashboxBalance = Number(cashbox?.balance ?? 0);
 

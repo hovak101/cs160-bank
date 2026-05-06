@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   buildAtmInstruction,
   buildAtmTransactionDescription,
@@ -280,7 +281,7 @@ export async function POST(request: Request) {
 
         if (isSavingsAccount(account.account_type)) {
           const savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
-            supabase,
+            supabaseAdmin,
             account.account_id,
             currentBalance
           );
@@ -305,7 +306,7 @@ export async function POST(request: Request) {
     const verificationCode =
       action === "withdraw" ? generateAtmVerificationCode() : null;
 
-    const { data: transaction, error: transactionError } = await supabase
+    const { data: transaction, error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: generateAtmReferenceNumber(action),
@@ -329,7 +330,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: simulation, error: simulationError } = await supabase
+    const { data: simulation, error: simulationError } = await supabaseAdmin
       .from("atm_simulations")
       .insert({
         customer_id: customer.customer_id,

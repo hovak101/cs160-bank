@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { ArrowDownToLine, Send, History } from "lucide-react";
-import type { Tables } from "@/lib/supabase/database.types";
+import { getOrCreateCashboxForCustomer } from "@/lib/banking/cashbox";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +25,6 @@ type RecentSend = {
   amount: number;
 };
 
-type CashboxRow = Pick<Tables<"cashboxes">, "cashbox_id" | "balance">;
-
 export default async function CashBoxPage() {
   const supabase = await createClient();
 
@@ -44,28 +42,7 @@ export default async function CashBoxPage() {
 
   if (!customer) redirect("/auth/onboarding");
 
-  let { data: cashbox } = await supabase
-    .from("cashboxes")
-    .select("cashbox_id, balance")
-    .eq("customer_id", customer.customer_id)
-    .maybeSingle();
-
-  if (!cashbox) {
-    const { data: newCashbox, error: createCashboxError } = await supabase
-      .from("cashboxes")
-      .insert({
-        customer_id: customer.customer_id,
-        balance: 0,
-      })
-      .select("cashbox_id, balance")
-      .single();
-
-    if (createCashboxError) {
-      throw new Error(createCashboxError.message);
-    }
-
-    cashbox = newCashbox as CashboxRow;
-  }
+  const cashbox = await getOrCreateCashboxForCustomer(customer.customer_id);
 
   const cashboxBalance = Number(cashbox?.balance ?? 0);
 

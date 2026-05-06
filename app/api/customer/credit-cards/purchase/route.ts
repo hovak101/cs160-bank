@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import {
   computeCreditMinimumPayment,
@@ -162,7 +163,7 @@ export async function POST(request: Request) {
     );
     const nowIso = new Date().toISOString();
 
-    const { error: updateCreditError } = await supabase
+    const { error: updateCreditError } = await supabaseAdmin
       .from("credit_accounts")
       .update({
         current_balance: nextBalance,
@@ -184,7 +185,7 @@ export async function POST(request: Request) {
       ? `${merchant} purchase - ${category}`
       : `${merchant} purchase`;
 
-    const { error: transactionError } = await supabase.from("transactions").insert({
+    const { error: transactionError } = await supabaseAdmin.from("transactions").insert({
       reference_number: `CRD-${Date.now()}`,
       source_account_id: accountId,
       destination_account_id: null,

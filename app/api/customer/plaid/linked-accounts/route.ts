@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { encryptText } from "@/lib/security/encryption";
-import { decryptText } from "@/lib/security/encryption";
 import {
   exchangePlaidPublicToken,
   getPlaidAccounts,
   PlaidApiError,
+  updatePlaidItemWebhook,
 } from "@/lib/plaid/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -22,7 +22,7 @@ export async function GET() {
     const { data, error } = await supabaseAdmin
       .from("plaid_linked_accounts")
       .select(
-        "linked_account_id, plaid_account_id, encrypted_access_token, access_token_iv, access_token_auth_tag, institution_name, plaid_account_name, plaid_account_mask, plaid_account_subtype, status, created_at"
+        "linked_account_id, institution_name, plaid_account_name, plaid_account_mask, plaid_account_subtype, status, created_at, available_balance, current_balance, balance_synced_at"
       )
       .eq("customer_id", customer.customerId)
       .eq("status", "active")
@@ -35,42 +35,22 @@ export async function GET() {
       );
     }
 
-    const accounts = await Promise.all(
-      (data ?? []).map(async (row: Record<string, unknown>) => {
-        let availableBalance: number | null = null;
-        let currentBalance: number | null = null;
-
-        try {
-          const accessToken = decryptText({
-            ciphertext: String(row.encrypted_access_token || ""),
-            iv: String(row.access_token_iv || ""),
-            authTag: String(row.access_token_auth_tag || ""),
-          });
-          const plaidAccounts = await getPlaidAccounts(accessToken);
-          const matchedAccount = plaidAccounts.accounts?.find(
-            (account) => account.account_id === row.plaid_account_id
-          );
-
-          availableBalance =
-            matchedAccount?.balances?.available ?? matchedAccount?.balances?.current ?? null;
-          currentBalance = matchedAccount?.balances?.current ?? null;
-        } catch (lookupError) {
-          console.error("plaid linked account balance lookup error:", lookupError);
-        }
-
-        return {
-          linked_account_id: String(row.linked_account_id || ""),
-          institution_name: String(row.institution_name || "External bank"),
-          plaid_account_name: String(row.plaid_account_name || "Linked account"),
-          plaid_account_mask: String(row.plaid_account_mask || ""),
-          plaid_account_subtype: String(row.plaid_account_subtype || ""),
-          status: String(row.status || "active"),
-          created_at: String(row.created_at || ""),
-          available_balance: availableBalance,
-          current_balance: currentBalance,
-        };
-      })
-    );
+    const accounts = (data ?? []).map((row: Record<string, unknown>) => ({
+      linked_account_id: String(row.linked_account_id || ""),
+      institution_name: String(row.institution_name || "External bank"),
+      plaid_account_name: String(row.plaid_account_name || "Linked account"),
+      plaid_account_mask: String(row.plaid_account_mask || ""),
+      plaid_account_subtype: String(row.plaid_account_subtype || ""),
+      status: String(row.status || "active"),
+      created_at: String(row.created_at || ""),
+      available_balance:
+        typeof row.available_balance === "number" ? row.available_balance : null,
+      current_balance:
+        typeof row.current_balance === "number" ? row.current_balance : null,
+      balance_synced_at: row.balance_synced_at
+        ? String(row.balance_synced_at)
+        : null,
+    }));
 
     return NextResponse.json({ accounts });
   } catch (error) {
@@ -132,6 +112,21 @@ export async function POST(request: Request) {
 
     const encrypted = encryptText(exchanged.access_token);
     const nowIso = new Date().toISOString();
+    const webhookUrl = resolvePlaidWebhookUrl();
+    const availableBalance =
+      typeof matchedAccount.balances?.available === "number"
+        ? matchedAccount.balances.available
+        : typeof matchedAccount.balances?.current === "number"
+          ? matchedAccount.balances.current
+          : null;
+    const currentBalance =
+      typeof matchedAccount.balances?.current === "number"
+        ? matchedAccount.balances.current
+        : null;
+
+    if (webhookUrl) {
+      await updatePlaidItemWebhook(exchanged.access_token, webhookUrl);
+    }
 
     const payload = {
       customer_id: customer.customerId,
@@ -149,6 +144,9 @@ export async function POST(request: Request) {
       plaid_account_mask: matchedAccount.mask || null,
       plaid_account_type: matchedAccount.type || null,
       plaid_account_subtype: matchedAccount.subtype || null,
+      available_balance: availableBalance,
+      current_balance: currentBalance,
+      balance_synced_at: nowIso,
       status: "active",
       last_verified_at: nowIso,
       updated_at: nowIso,
@@ -160,7 +158,7 @@ export async function POST(request: Request) {
         onConflict: "customer_id,plaid_account_id",
       })
       .select(
-        "linked_account_id, institution_name, plaid_account_name, plaid_account_mask, plaid_account_subtype, status, created_at"
+        "linked_account_id, institution_name, plaid_account_name, plaid_account_mask, plaid_account_subtype, status, created_at, available_balance, current_balance, balance_synced_at"
       )
       .single();
 
@@ -180,6 +178,15 @@ export async function POST(request: Request) {
         plaid_account_subtype: String(data.plaid_account_subtype || ""),
         status: String(data.status || "active"),
         created_at: String(data.created_at || ""),
+        available_balance:
+          typeof data.available_balance === "number"
+            ? data.available_balance
+            : null,
+        current_balance:
+          typeof data.current_balance === "number" ? data.current_balance : null,
+        balance_synced_at: data.balance_synced_at
+          ? String(data.balance_synced_at)
+          : null,
       },
       message: "External bank linked and saved successfully.",
     });
@@ -248,4 +255,18 @@ async function getAuthenticatedCustomer() {
   return {
     customerId: customer.customer_id,
   };
+}
+
+function resolvePlaidWebhookUrl() {
+  const explicitUrl = process.env.PLAID_WEBHOOK_URL?.trim();
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) {
+    return `https://${vercelUrl}/public/plaid-webhook`;
+  }
+
+  return null;
 }

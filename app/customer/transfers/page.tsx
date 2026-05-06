@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TransferWorkspace } from "@/components/transfer-workspace";
+import { getOrCreateCashboxForCustomer } from "@/lib/banking/cashbox";
 
 export const dynamic = "force-dynamic";
 
@@ -15,29 +16,6 @@ export default async function TransfersPage({
 }: TransfersPageProps) {
   const supabase = await createClient();
   const params = await searchParams;
-
-  type CashboxRow = {
-    cashbox_id: string;
-    balance: number;
-  };
-  type CashboxMutationResult = {
-    data: CashboxRow | null;
-    error: { message: string } | null;
-  };
-  type CashboxClient = {
-    from: (table: "cashboxes") => {
-      select: (columns: string) => {
-        eq: (column: string, value: string) => {
-          maybeSingle: () => Promise<CashboxMutationResult>;
-        };
-      };
-      insert: (values: { customer_id: string; balance: number }) => {
-        select: (columns: string) => {
-          single: () => Promise<CashboxMutationResult>;
-        };
-      };
-    };
-  };
 
   const {
     data: { user },
@@ -62,34 +40,7 @@ export default async function TransfersPage({
     .eq("status", "active")
     .order("created_at", { ascending: true });
 
-  let cashbox: CashboxRow | null = null;
-
-  const cashboxClient = supabase as unknown as CashboxClient;
-
-  const { data: cashboxData } = await cashboxClient
-    .from("cashboxes")
-    .select("cashbox_id, balance")
-    .eq("customer_id", customer.customer_id)
-    .maybeSingle();
-
-  cashbox = cashboxData as CashboxRow | null;
-
-  if (!cashbox) {
-    const { data: createdCashbox, error: createCashboxError } = await cashboxClient
-      .from("cashboxes")
-      .insert({
-        customer_id: customer.customer_id,
-        balance: 0,
-      })
-      .select("cashbox_id, balance")
-      .single();
-
-    if (createCashboxError) {
-      throw new Error(createCashboxError.message);
-    }
-
-    cashbox = createdCashbox as CashboxRow;
-  }
+  const cashbox = await getOrCreateCashboxForCustomer(customer.customer_id);
 
   const isSandboxPlaid =
     (process.env.PLAID_ENV || "sandbox").toLowerCase() === "sandbox";

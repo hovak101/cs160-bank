@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   buildStoredAtmTransactionDescription,
   canUseAtmDeposit,
@@ -29,7 +30,7 @@ import { recordBankIncomeTransactions } from "@/lib/banking/bank-income";
 export const dynamic = "force-dynamic";
 
 async function failPendingAtmSimulation(params: {
-  supabase: Awaited<ReturnType<typeof createClient>>;
+  supabase: typeof supabaseAdmin;
   simulationId: string;
   transactionId: string;
   action: "deposit" | "withdraw";
@@ -155,7 +156,7 @@ export async function POST(
 
     if (accountError || !account) {
       return failPendingAtmSimulation({
-        supabase,
+        supabase: supabaseAdmin,
         simulationId: simulation.atm_simulation_id,
         transactionId: simulation.transaction_id,
         action,
@@ -169,7 +170,7 @@ export async function POST(
     const statusError = getAtmAccountStatusErrorMessage(account.status);
     if (statusError) {
       return failPendingAtmSimulation({
-        supabase,
+        supabase: supabaseAdmin,
         simulationId: simulation.atm_simulation_id,
         transactionId: simulation.transaction_id,
         action,
@@ -193,7 +194,7 @@ export async function POST(
     );
     if (accountRestrictionMessage) {
       return failPendingAtmSimulation({
-        supabase,
+        supabase: supabaseAdmin,
         simulationId: simulation.atm_simulation_id,
         transactionId: simulation.transaction_id,
         action,
@@ -206,7 +207,7 @@ export async function POST(
     if (action === "deposit") {
       if (amount > MANUAL_DEPOSIT_LIMIT_USD) {
         return failPendingAtmSimulation({
-          supabase,
+          supabase: supabaseAdmin,
           simulationId: simulation.atm_simulation_id,
           transactionId: simulation.transaction_id,
           action,
@@ -218,7 +219,7 @@ export async function POST(
 
       if (!canUseAtmDeposit(account.account_type)) {
         return failPendingAtmSimulation({
-          supabase,
+          supabase: supabaseAdmin,
           simulationId: simulation.atm_simulation_id,
           transactionId: simulation.transaction_id,
           action,
@@ -230,7 +231,7 @@ export async function POST(
 
       const nextBalance = roundCurrency(Number(account.balance || 0) + amount);
 
-      const { error: updateAccountError } = await supabase
+      const { error: updateAccountError } = await supabaseAdmin
         .from("accounts")
         .update({
           balance: nextBalance,
@@ -247,7 +248,7 @@ export async function POST(
     } else {
       if (!canUseAtmWithdrawal(account.account_type)) {
         return failPendingAtmSimulation({
-          supabase,
+          supabase: supabaseAdmin,
           simulationId: simulation.atm_simulation_id,
           transactionId: simulation.transaction_id,
           action,
@@ -268,7 +269,7 @@ export async function POST(
 
         if (creditAccountError || !creditAccount) {
           return failPendingAtmSimulation({
-            supabase,
+            supabase: supabaseAdmin,
             simulationId: simulation.atm_simulation_id,
             transactionId: simulation.transaction_id,
             action,
@@ -289,7 +290,7 @@ export async function POST(
 
         if (amount > cashAdvanceRemaining) {
           return failPendingAtmSimulation({
-            supabase,
+            supabase: supabaseAdmin,
             simulationId: simulation.atm_simulation_id,
             transactionId: simulation.transaction_id,
             action,
@@ -303,7 +304,7 @@ export async function POST(
 
         if (amount + feeAmount > availableCredit) {
           return failPendingAtmSimulation({
-            supabase,
+            supabase: supabaseAdmin,
             simulationId: simulation.atm_simulation_id,
             transactionId: simulation.transaction_id,
             action,
@@ -319,7 +320,7 @@ export async function POST(
         const nextCashAdvanceBalance =
           Number(creditAccount.cash_advance_balance || 0) + amount;
 
-        const { error: updateCreditError } = await supabase
+        const { error: updateCreditError } = await supabaseAdmin
           .from("credit_accounts")
           .update({
             current_balance: nextCurrentBalance,
@@ -337,7 +338,7 @@ export async function POST(
           );
         }
 
-        const { data: feeTransactionRows, error: feeTransactionError } = await supabase
+        const { data: feeTransactionRows, error: feeTransactionError } = await supabaseAdmin
           .from("transactions")
           .insert({
             reference_number: `ATM-FEE-${Date.now()}`,
@@ -366,7 +367,7 @@ export async function POST(
 
         if (amount > currentBalance) {
           return failPendingAtmSimulation({
-            supabase,
+            supabase: supabaseAdmin,
             simulationId: simulation.atm_simulation_id,
             transactionId: simulation.transaction_id,
             action,
@@ -378,7 +379,7 @@ export async function POST(
 
         if (isSavingsAccount(account.account_type)) {
           const savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
-            supabase,
+            supabaseAdmin,
             account.account_id,
             currentBalance
           );
@@ -387,7 +388,7 @@ export async function POST(
 
           if (amount > remainingAllowance) {
             return failPendingAtmSimulation({
-              supabase,
+              supabase: supabaseAdmin,
               simulationId: simulation.atm_simulation_id,
               transactionId: simulation.transaction_id,
               action,
@@ -399,11 +400,13 @@ export async function POST(
             });
           }
 
-          const { error: activityError } = await supabase
+          const { error: activityError } = await supabaseAdmin
             .from("savings_monthly_activity")
             .update({
               withdrawn_amount:
-                Number(savingsMonthlyActivity.withdrawn_amount || 0) + amount,
+                roundCurrency(
+                  Number(savingsMonthlyActivity.withdrawn_amount || 0) + amount
+                ),
               updated_at: nowIso,
             })
             .eq("account_id", account.account_id)
@@ -419,7 +422,7 @@ export async function POST(
 
         const nextBalance = roundCurrency(currentBalance - amount);
 
-        const { error: updateAccountError } = await supabase
+        const { error: updateAccountError } = await supabaseAdmin
           .from("accounts")
           .update({
             balance: nextBalance,
@@ -436,7 +439,7 @@ export async function POST(
       }
     }
 
-    const { data: updatedTransaction, error: updateTransactionError } = await supabase
+    const { data: updatedTransaction, error: updateTransactionError } = await supabaseAdmin
       .from("transactions")
       .update({
         status: "completed",
@@ -459,7 +462,7 @@ export async function POST(
       );
     }
 
-    const { data: updatedSimulation, error: updateSimulationError } = await supabase
+    const { data: updatedSimulation, error: updateSimulationError } = await supabaseAdmin
       .from("atm_simulations")
       .update({
         status: "completed",

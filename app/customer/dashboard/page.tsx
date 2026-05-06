@@ -19,7 +19,7 @@ import {
   isCreditAccount,
   isSavingsAccount,
 } from "@/lib/banking/rules";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedAppContext } from "@/lib/auth/get-authenticated-app-context";
 
 export const dynamic = "force-dynamic";
 
@@ -117,19 +117,9 @@ type Transaction = {
 };
 
 export default async function CustomerDashboardPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, customer } = await getAuthenticatedAppContext();
 
   if (!user) redirect("/auth/login");
-
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("customer_id, first_name, last_name")
-    .eq("user_id", user.id)
-    .maybeSingle();
 
   if (!customer) redirect("/auth/onboarding");
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import {
   computeCreditMinimumPayment,
@@ -177,8 +178,8 @@ export async function POST(req: Request) {
       | null = null;
 
     if (isSavingsAccount(sourceAccount.account_type)) {
-      savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
-        supabase,
+        savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
+        supabaseAdmin,
         sourceAccount.account_id,
         sourceBalance
       );
@@ -199,7 +200,7 @@ export async function POST(req: Request) {
 
     const nowIso = new Date().toISOString();
 
-    const { error: updateSourceError } = await supabase
+    const { error: updateSourceError } = await supabaseAdmin
       .from("accounts")
       .update({
         balance: roundCurrency(sourceBalance - amountValue),
@@ -216,7 +217,7 @@ export async function POST(req: Request) {
     }
 
     if (savingsMonthlyActivity) {
-      const { error: activityError } = await supabase
+      const { error: activityError } = await supabaseAdmin
         .from("savings_monthly_activity")
         .update({
           withdrawn_amount:
@@ -275,7 +276,7 @@ export async function POST(req: Request) {
 
       const nextCreditBalance = roundCurrency(outstandingBalance - amountValue);
 
-      const { error: updateCreditError } = await supabase
+      const { error: updateCreditError } = await supabaseAdmin
         .from("credit_accounts")
         .update({
           current_balance: nextCreditBalance,
@@ -295,7 +296,7 @@ export async function POST(req: Request) {
       transactionType = "credit_payment";
       description = "Credit card payment";
     } else {
-      const { error: updateDestError } = await supabase
+      const { error: updateDestError } = await supabaseAdmin
         .from("accounts")
         .update({
           balance: roundCurrency(destBalance + amountValue),
@@ -312,7 +313,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { error: transactionError } = await supabase
+    const { error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: `TRF-${Date.now()}`,

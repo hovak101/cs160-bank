@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { computeLoanAssessment } from "@/lib/banking/loans";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 const MAX_LOAN_AMOUNT = 1_000_000;
@@ -136,8 +137,7 @@ export async function POST(request: Request) {
       return sum + Number(creditAccount?.current_balance ?? 0);
     }, 0);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingLoans, error: existingLoansError } = await (supabase as any)
+    const { data: existingLoans, error: existingLoansError } = await supabase
       .from("loans")
       .select("loan_id, status, outstanding_principal, accrued_interest")
       .eq("customer_id", customer.customer_id)
@@ -174,8 +174,7 @@ export async function POST(request: Request) {
       activeLoanOutstanding,
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: createdLoan, error: insertError } = await (supabase as any)
+    const { data: createdLoan, error: insertError } = await supabaseAdmin
       .from("loans")
       .insert({
         customer_id: customer.customer_id,

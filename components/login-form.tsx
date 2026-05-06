@@ -101,11 +101,11 @@ export function LoginForm() {
       return;
     }
 
-    // Skip onboarding for managers - redirect directly to dashboard
-    if (appUser?.role === "manager") {
-      router.push("/dashboard");
+    if (appUser?.role === "admin") {
+      router.push("/admin/dashboard");
+    } else if (appUser?.role === "manager") {
+      router.push("/manager/dashboard");
     } else {
-      // For regular customers, check if onboarding is needed
       const needsOnboarding =
         !customer ||
         !customer.first_name?.trim() ||
@@ -114,7 +114,7 @@ export function LoginForm() {
       if (needsOnboarding) {
         router.push("/auth/onboarding");
       } else {
-        router.push("/dashboard");
+        router.push("/customer/dashboard");
       }
     }
 

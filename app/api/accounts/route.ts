@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { buildCreditCardSeed, getCustomerDisplayName } from "@/lib/banking/server";
 import { getDefaultCreditTerms } from "@/lib/banking/rules";
 import { hashSecurityCode } from "@/lib/banking/security-code.server";
+import type { Database } from "@/lib/supabase/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   isValidSecurityCodeFormat,
   normalizeSecurityCode,
@@ -109,11 +112,11 @@ export async function POST(request: Request) {
 
     let account_number: string;
     try {
-        account_number = await generateUniqueAccountNumber(supabase);
+        account_number = await generateUniqueAccountNumber(supabaseAdmin);
     } catch {
         return NextResponse.json({ error: "Failed to generate account number" }, { status: 500 });
     }   
-    const { data: newAccount, error: createError } = await supabase
+    const { data: newAccount, error: createError } = await supabaseAdmin
         .from("accounts")
         .insert({
             customer_id: customer.customer_id,
@@ -136,7 +139,7 @@ export async function POST(request: Request) {
       const securityCodeHash = hashSecurityCode(securityCode);
       const securityCodeUpdatedAt = new Date().toISOString();
 
-        const { error: creditAccountError } = await supabase
+        const { error: creditAccountError } = await supabaseAdmin
           .from("credit_accounts")
           .insert({
             account_id: newAccount.account_id,
@@ -144,7 +147,7 @@ export async function POST(request: Request) {
           });
 
         if (creditAccountError) {
-          await supabase.from("accounts").delete().eq("account_id", newAccount.account_id);
+          await supabaseAdmin.from("accounts").delete().eq("account_id", newAccount.account_id);
           return NextResponse.json(
             { error: creditAccountError.message || "Failed to create credit account details." },
             { status: 500 }
@@ -152,7 +155,7 @@ export async function POST(request: Request) {
         }
 
         const cardholderName = getCustomerDisplayName(customer);
-        const { error: creditCardError } = await supabase
+        const { error: creditCardError } = await supabaseAdmin
           .from("credit_cards")
           .insert({
             account_id: newAccount.account_id,
@@ -164,8 +167,8 @@ export async function POST(request: Request) {
           });
 
         if (creditCardError) {
-          await supabase.from("credit_accounts").delete().eq("account_id", newAccount.account_id);
-          await supabase.from("accounts").delete().eq("account_id", newAccount.account_id);
+          await supabaseAdmin.from("credit_accounts").delete().eq("account_id", newAccount.account_id);
+          await supabaseAdmin.from("accounts").delete().eq("account_id", newAccount.account_id);
           return NextResponse.json(
             { error: creditCardError.message || "Failed to issue credit card." },
             { status: 500 }
@@ -176,7 +179,7 @@ export async function POST(request: Request) {
     return NextResponse.json(newAccount, { status: 201 });    
 }
 
-type AppSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type AppSupabaseClient = SupabaseClient<Database>;
 
 async function generateUniqueAccountNumber(supabase: AppSupabaseClient): Promise<string> {
   let attempts = 0;

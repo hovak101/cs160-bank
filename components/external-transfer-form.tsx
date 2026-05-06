@@ -11,7 +11,6 @@ import {
   Landmark,
   Link2,
   Loader2,
-  RefreshCw,
   Trash2,
 } from "lucide-react";
 import {
@@ -45,6 +44,7 @@ type LinkedExternalAccount = {
   created_at: string;
   available_balance?: number | null;
   current_balance?: number | null;
+  balance_synced_at?: string | null;
 };
 
 type PlaidLinkMetadata = {
@@ -358,6 +358,7 @@ export function ExternalTransferForm({
         }
 
         setAmount("");
+        await loadLinkedAccounts();
         setMessage(data.message || "External transfer completed.");
         router.refresh();
       } catch {
@@ -399,9 +400,9 @@ export function ExternalTransferForm({
             </p>
             {isSandboxDemo ? (
               <p className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm leading-6 text-cyan-100">
-                Sandbox demo mode is active. Move Money In is unlimited for easier demos,
-                while Move Money Out mirrors the selected Vitality Bank account balance to
-                avoid Plaid ledger funding errors.
+                Sandbox demo mode is active. External balance snapshots update in the
+                local database immediately after each transfer and refresh again when
+                Plaid sends webhook updates.
               </p>
             ) : null}
           </div>
@@ -513,20 +514,15 @@ export function ExternalTransferForm({
                   {formatCurrency(selectedLinkedAccount.available_balance)}
                 </p>
               ) : null}
+              {selectedLinkedAccount?.balance_synced_at ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Last synced:{" "}
+                  {new Date(selectedLinkedAccount.balance_synced_at).toLocaleString()}
+                </p>
+              ) : null}
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void loadLinkedAccounts()}
-                  disabled={isLoadingAccounts}
-                  className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-slate-900 px-3 py-2 font-semibold text-white hover:border-cyan-400/40 disabled:opacity-60"
-                >
-                  <RefreshCw
-                    size={16}
-                    className={isLoadingAccounts ? "animate-spin" : ""}
-                  />
-                </button>
                 <button
                   type="button"
                   onClick={handleLinkAccount}
@@ -677,8 +673,8 @@ export function ExternalTransferForm({
             </p>
             {isSandboxDemo ? (
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                In sandbox, inbound transfers are unlimited for demos, while outbound
-                transfers mirror the selected internal account balance.
+                Sandbox linked-account balances now follow the same local snapshot and
+                webhook sync flow as production.
               </p>
             ) : null}
           </div>

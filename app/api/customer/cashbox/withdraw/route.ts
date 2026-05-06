@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getOrCreateCashboxForCustomer } from "@/lib/banking/cashbox";
 import { parseCurrencyInput } from "@/lib/banking/amount";
 import { isDepositEligible } from "@/lib/banking/rules";
 import { roundCurrency } from "@/lib/banking/rules";
@@ -55,31 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let { data: cashbox } = await supabase
-      .from("cashboxes")
-      .select("cashbox_id, balance")
-      .eq("customer_id", customer.customer_id)
-      .maybeSingle();
-
-    if (!cashbox) {
-      const { data: createdCashbox, error: createCashboxError } = await supabase
-        .from("cashboxes")
-        .insert({
-          customer_id: customer.customer_id,
-          balance: 0,
-        })
-        .select("cashbox_id, balance")
-        .single();
-
-      if (createCashboxError || !createdCashbox) {
-        return NextResponse.json(
-          { error: "Failed to create CashBox." },
-          { status: 500 }
-        );
-      }
-
-      cashbox = createdCashbox;
-    }
+    const cashbox = await getOrCreateCashboxForCustomer(customer.customer_id);
 
     if (Number(cashbox.balance ?? 0) < amount) {
       return NextResponse.json(
@@ -131,7 +109,7 @@ export async function POST(request: Request) {
       targetAccount.account_name || targetAccount.account_type || "Account"
     } • ****${targetAccount.account_number?.slice(-4) ?? ""}`;
 
-    const { error: updateCashboxError } = await supabase
+    const { error: updateCashboxError } = await supabaseAdmin
       .from("cashboxes")
       .update({
         balance: newCashboxBalance,
@@ -146,7 +124,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: updateAccountError } = await supabase
+    const { error: updateAccountError } = await supabaseAdmin
       .from("accounts")
       .update({
         balance: newAccountBalance,
@@ -155,7 +133,7 @@ export async function POST(request: Request) {
       .eq("account_id", targetAccount.account_id);
 
     if (updateAccountError) {
-      await supabase
+      await supabaseAdmin
         .from("cashboxes")
         .update({
           balance: Number(cashbox.balance),
@@ -169,7 +147,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: transactionError } = await supabase
+    const { error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: referenceNumber,

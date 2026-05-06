@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import {
   LARGE_DEPOSIT_SUPPORT_MESSAGE,
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
     const currentBalance = Number(account.balance || 0);
     const newBalance = roundCurrency(currentBalance + amountValue);
 
-    const { error: updateAccountError } = await supabase
+    const { error: updateAccountError } = await supabaseAdmin
       .from("accounts")
       .update({
         balance: newBalance,
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
     }
 
     // Insert transaction first to get the transaction_id
-    const { data: transactionData, error: transactionError } = await supabase
+    const { data: transactionData, error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: `CHK-${Date.now()}`,
@@ -178,7 +179,7 @@ export async function POST(req: Request) {
       }
 
       // Store image reference in cheque_deposits table
-      const { error: chequeDepositError } = await supabase
+      const { error: chequeDepositError } = await supabaseAdmin
         .from("cheque_deposits")
         .insert({
           transaction_id: transactionData.transaction_id,
