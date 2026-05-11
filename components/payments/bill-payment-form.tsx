@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { isCheckingAccount } from "@/lib/banking/rules";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 import { validateMoneyAmount, validateNotPastDate } from "@/lib/banking/validation";
 import { todayInBankTz } from "@/lib/banking/clock";
 
@@ -31,7 +32,9 @@ export function BillPaymentForm() {
   useEffect(() => {
     async function fetchAccounts() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) return;
 
         const { data: customer } = await supabase
@@ -44,9 +47,14 @@ export function BillPaymentForm() {
           const { data: accountsData } = await supabase
             .from("accounts")
             .select("account_id, account_name, account_number, account_type")
-            .eq("customer_id", customer.customer_id);
-          
-          setAccounts((accountsData || []).filter((account) => isCheckingAccount(account.account_type)));
+            .eq("customer_id", customer.customer_id)
+            .eq("status", "active");
+
+          setAccounts(
+            (accountsData || []).filter((account) =>
+              isCheckingAccount(account.account_type)
+            )
+          );
         }
       } catch (error) {
         console.error("Error fetching accounts:", error);
@@ -64,6 +72,15 @@ export function BillPaymentForm() {
 
     const formData = new FormData(e.currentTarget);
     const payload = Object.fromEntries(formData.entries());
+    const parsedAmount = parseCurrencyInput(payload.amount, {
+      fieldLabel: "Amount",
+    });
+
+    if (!parsedAmount.ok) {
+      toast.error(parsedAmount.error);
+      setSubmitting(false);
+      return;
+    }
 
     const amountNum = parseFloat(payload.amount as string);
     const amountErr = validateMoneyAmount(amountNum);
@@ -96,50 +113,52 @@ export function BillPaymentForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          amount: amountNum,
+          amount: parsedAmount.value,
         }),
       });
 
       const result = await res.json();
-      console.log("API response:", res.status, result);
       if (!res.ok) throw new Error(result.error || "Failed to create schedule");
 
       toast.success("Bill payment scheduled!");
       window.location.reload();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Submit error:", err);
-      setFormError(err.message || "An error occurred");
-      toast.error(err.message || "An error occurred");
+      toast.error(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setSubmitting(false);
     }
   }
 
   const selectClass =
-    "flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white ring-offset-background focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 appearance-none cursor-pointer";
+    "flex h-10 w-full cursor-pointer appearance-none rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white ring-offset-background focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2";
 
   return (
-    <Card className="bg-white/5 border-white/10 text-white shadow-[0_0_40px_-8px_rgba(34,211,238,0.15)]">
+    <Card className="border-white/10 bg-white/5 text-white shadow-[0_0_40px_-8px_rgba(34,211,238,0.15)]">
       <CardHeader>
-        <CardTitle className="text-lg font-bold text-cyan-400 uppercase tracking-tight">
+        <CardTitle className="text-lg font-bold uppercase tracking-tight text-cyan-400">
           New Bill Schedule
         </CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-
-          {/* Source Account */}
           <div className="space-y-2">
             <Label>Pay From</Label>
             {loadingAccounts ? (
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+              <div className="flex items-center gap-2 font-mono text-xs text-slate-500">
                 <Loader2 className="animate-spin" size={14} /> SYNCING VAULT...
               </div>
             ) : (
               <select name="account_id" className={selectClass} required>
-                <option value="" className="bg-[#0f172a]">Select Source Account</option>
+                <option value="" className="bg-[#0f172a]">
+                  Select Source Account
+                </option>
                 {accounts.map((acc) => (
-                  <option key={acc.account_id} value={acc.account_id} className="bg-[#0f172a]">
+                  <option
+                    key={acc.account_id}
+                    value={acc.account_id}
+                    className="bg-[#0f172a]"
+                  >
                     {acc.account_name} (****{acc.account_number.slice(-4)})
                   </option>
                 ))}
@@ -147,14 +166,13 @@ export function BillPaymentForm() {
             )}
           </div>
 
-          {/* Payee by account number, backend resolves to account UUID */}
           <div className="space-y-2">
             <Label htmlFor="payee_account_number">Pay To (Account Number)</Label>
             <Input
               id="payee_account_number"
               name="payee_account_number"
               placeholder="Enter recipient's account number"
-              className="bg-white/5 border-white/10 focus:border-cyan-400"
+              className="border-white/10 bg-white/5 focus:border-cyan-400"
               required
             />
             <p className="text-[11px] text-slate-500">
@@ -167,7 +185,7 @@ export function BillPaymentForm() {
             <Input
               name="nickname"
               placeholder="e.g. Rent, Electric Bill"
-              className="bg-white/5 border-white/10 focus:border-cyan-400"
+              className="border-white/10 bg-white/5 focus:border-cyan-400"
             />
           </div>
 
@@ -177,9 +195,11 @@ export function BillPaymentForm() {
               <Input
                 name="amount"
                 type="number"
+                inputMode="decimal"
+                min="0.01"
                 step="0.01"
                 placeholder="0.00"
-                className="bg-white/5 border-white/10 focus:border-cyan-400"
+                className="border-white/10 bg-white/5 focus:border-cyan-400"
                 required
               />
             </div>
@@ -187,10 +207,18 @@ export function BillPaymentForm() {
             <div className="space-y-2">
               <Label>Frequency</Label>
               <select name="frequency" className={selectClass} defaultValue="monthly">
-                <option value="weekly"    className="bg-[#0f172a]">Weekly</option>
-                <option value="bi-weekly" className="bg-[#0f172a]">Bi-Weekly</option>
-                <option value="monthly"   className="bg-[#0f172a]">Monthly</option>
-                <option value="annually"  className="bg-[#0f172a]">Annually</option>
+                <option value="weekly" className="bg-[#0f172a]">
+                  Weekly
+                </option>
+                <option value="bi-weekly" className="bg-[#0f172a]">
+                  Bi-Weekly
+                </option>
+                <option value="monthly" className="bg-[#0f172a]">
+                  Monthly
+                </option>
+                <option value="annually" className="bg-[#0f172a]">
+                  Annually
+                </option>
               </select>
             </div>
           </div>
@@ -225,7 +253,7 @@ export function BillPaymentForm() {
 
           <Button
             type="submit"
-            className="w-full bg-cyan-500 hover:bg-cyan-600 text-[#0f172a] font-bold uppercase tracking-wider transition-all"
+            className="w-full bg-cyan-500 font-bold uppercase tracking-wider text-[#0f172a] transition-all hover:bg-cyan-600"
             disabled={submitting || loadingAccounts}
           >
             {submitting ? "Processing..." : "Confirm Schedule"}
