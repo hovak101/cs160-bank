@@ -204,6 +204,29 @@ export async function POST(
       });
     }
 
+    const { data: claimedSimulation, error: claimSimulationError } = await supabase
+      .from("atm_simulations")
+      .update({
+        status: "completed",
+        completed_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("status", "pending")
+      .eq("atm_simulation_id", simulation.atm_simulation_id)
+      .select("atm_simulation_id")
+      .maybeSingle();
+
+    if (claimSimulationError || !claimedSimulation) {
+      return NextResponse.json(
+        {
+          error:
+            claimSimulationError?.message ||
+            "This ATM action has already been completed.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (action === "deposit") {
       if (amount > MANUAL_DEPOSIT_LIMIT_USD) {
         return failPendingAtmSimulation({

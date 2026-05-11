@@ -29,6 +29,7 @@ import {
   syncPlaidBalancesForItem,
 } from "@/lib/plaid/sync";
 import { decryptText } from "@/lib/security/encryption";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -87,6 +88,10 @@ export async function POST(req: Request) {
     }
 
     const amountValue = parsedAmount.value;
+    const amountError = validateMoneyAmount(amountValue);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
+    }
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")

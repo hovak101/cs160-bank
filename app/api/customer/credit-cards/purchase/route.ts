@@ -13,6 +13,7 @@ import {
   normalizeSecurityCode,
 } from "@/lib/banking/security-code";
 import { parseCurrencyInput } from "@/lib/banking/amount";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,11 @@ export async function POST(request: Request) {
     }
 
     const amount = parsedAmount.value;
+
+    const amountError = validateMoneyAmount(amount);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
+    }
 
     if (!isValidSecurityCodeFormat(securityCode)) {
       return NextResponse.json(

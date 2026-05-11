@@ -9,7 +9,6 @@ import {
   Users,
   ArrowRightLeft,
   Send,
-  Settings,
   Landmark,
   CalendarClock,
   HandCoins,
@@ -83,12 +82,6 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
       href: "/customer/bill-payments",
       matchPrefixes: ["/customer/bill-payments"],
     },
-    {
-      name: "Settings",
-      icon: Settings,
-      href: "/customer/settings",
-      matchPrefixes: ["/customer/settings"],
-    },
   ];
 
   return (
@@ -104,7 +97,11 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
           </div>
           <span className="text-white font-bold text-xl">Vitality <span className="text-cyan-400">Bank</span></span>
         </div>
-        <button onClick={() => setOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
+        <button
+          onClick={() => setOpen(false)}
+          aria-label="Close navigation menu"
+          className="lg:hidden text-slate-400 hover:text-white"
+        >
           <X size={20} />
         </button>
       </div>

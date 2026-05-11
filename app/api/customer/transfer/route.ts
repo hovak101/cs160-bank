@@ -17,6 +17,7 @@ import {
   parseCurrencyInput,
   willExceedMaxAccountBalance,
 } from "@/lib/banking/amount";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,10 @@ export async function POST(req: Request) {
     }
 
     const amountValue = parsedAmount.value;
+    const amountError = validateMoneyAmount(amountValue);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
+    }
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")

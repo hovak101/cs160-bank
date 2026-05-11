@@ -23,14 +23,14 @@ export default async function OnboardingPage() {
     redirect("/auth/login");
   }
 
-  // Redirect managers directly to dashboard - they don't need onboarding
+  // Only customers go through onboarding; managers/admins/auditors skip it
   const { data: appUser } = await supabase
     .from("users")
     .select("role")
     .eq("user_id", user.id)
     .single();
 
-  if (appUser?.role === "manager") {
+  if (appUser?.role && appUser.role !== "customer") {
     redirect("/dashboard");
   }
 

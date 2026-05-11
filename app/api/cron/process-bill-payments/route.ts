@@ -15,17 +15,15 @@ type BillSchedule = BillScheduleRow & {
 };
 
 type ServiceSupabase = SupabaseClient<Database>;
+import { todayInBankTz } from "@/lib/banking/clock";
 
 // this runs every day at 8am via vercel cron
 // it finds all payments that are due and processes them
 // (deduct from payer, credit payee - both are internal accounts).
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.NEXT_PUBLIC_CRON_SECRET;
   if (!cronSecret) {
-    return NextResponse.json(
-      { error: "Server misconfigured: no CRON_SECRET set" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server misconfigured: no NEXT_PUBLIC_CRON_SECRET set" }, { status: 500 });
   }
 
   const authHeader = request.headers.get("authorization") ?? "";
@@ -65,13 +63,17 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInBankTz();
 
-  const { data: dueSchedules } = await supabase
+  const { data: dueSchedules, error: fetchError } = await supabase
     .from("bill_schedules")
     .select("*")
     .eq("status", "active")
     .lte("next_payment_date", today);
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
 
   if (!dueSchedules || dueSchedules.length === 0) {
     return NextResponse.json({ message: "No payments due today" });
@@ -132,8 +134,18 @@ async function processOnePayment(
     return;
   }
 
-  if (fromAccount.balance < schedule.amount) {
+  if (Number(fromAccount.balance) < Number(schedule.amount)) {
     await recordExecution(supabase, schedule, "failed", "insufficient_funds");
+
+    const nextPaymentDate = getNextDate(schedule.next_payment_date, schedule.frequency);
+    const scheduleIsDone = schedule.end_date && nextPaymentDate > schedule.end_date;
+    await supabase
+      .from("bill_schedules")
+      .update({
+        next_payment_date: nextPaymentDate,
+        status: scheduleIsDone ? "completed" : "active",
+      })
+      .eq("schedule_id", schedule.schedule_id);
     return;
   }
 

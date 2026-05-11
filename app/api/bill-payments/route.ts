@@ -25,6 +25,8 @@ type PaymentExecutionRow = {
   actual_execution_at: string | null;
   scheduled_date: string | null;
 };
+import { validateMoneyAmount, validateNotPastDate } from "@/lib/banking/validation";
+import { todayInBankTz } from "@/lib/banking/clock";
 
 // get all bill payment schedules for the logged in user
 export async function GET() {
@@ -141,6 +143,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
   }
 
+  const amountError = validateMoneyAmount(Number(amount));
+  if (amountError) {
+    return NextResponse.json({ error: amountError }, { status: 400 });
+  }
+
+  const startDateError = validateNotPastDate(start_date, todayInBankTz(), "Start date");
+  if (startDateError) {
+    return NextResponse.json({ error: startDateError }, { status: 400 });
+  }
+
   if (end_date && end_date <= start_date) {
     return NextResponse.json(
       { error: "End date must be after start date." },
@@ -161,7 +173,7 @@ export async function POST(request: Request) {
 
   const { data: sourceAccount } = await supabase
     .from("accounts")
-    .select("account_id, account_type, status")
+    .select("account_id, account_type, status, balance")
     .eq("account_id", account_id)
     .eq("customer_id", customerData!.customer_id)
     .single();
@@ -182,6 +194,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Bill payments can only be scheduled from active checking accounts." },
       { status: 400 }
+    );
+  }
+  if (Number(sourceAccount.balance) < Number(amount)) {
+    return NextResponse.json(
+      {
+        error: `Insufficient funds in source account. Balance is $${Number(sourceAccount.balance).toFixed(2)}, scheduled amount is $${Number(amount).toFixed(2)}.`,
+      },
+      { status: 400 },
     );
   }
 

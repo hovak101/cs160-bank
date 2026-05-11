@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { parseCurrencyInput } from "@/lib/banking/amount";
 import { roundCurrency } from "@/lib/banking/rules";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,11 @@ export async function POST(request: Request) {
     }
 
     const amount = parsedAmount.value;
+
+    const amountError = validateMoneyAmount(amount);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
+    }
 
     const { data: senderCustomer, error: senderCustomerError } =
       await supabaseAdmin

@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { isCheckingAccount } from "@/lib/banking/rules";
 import { parseCurrencyInput } from "@/lib/banking/amount";
+import { validateMoneyAmount, validateNotPastDate } from "@/lib/banking/validation";
+import { todayInBankTz } from "@/lib/banking/clock";
 
 type Account = {
   account_id: string;
@@ -22,6 +24,8 @@ export function BillPaymentForm() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const todayStr = todayInBankTz();
 
   const supabase = createClient();
 
@@ -62,6 +66,7 @@ export function BillPaymentForm() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setFormError(null);
     setSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
@@ -72,6 +77,31 @@ export function BillPaymentForm() {
 
     if (!parsedAmount.ok) {
       toast.error(parsedAmount.error);
+      setSubmitting(false);
+      return;
+    }
+
+    const amountNum = parseFloat(payload.amount as string);
+    const amountErr = validateMoneyAmount(amountNum);
+    if (amountErr) {
+      setFormError(amountErr);
+      toast.error(amountErr);
+      setSubmitting(false);
+      return;
+    }
+
+    const startDateErr = validateNotPastDate(payload.start_date as string, todayStr, "Start date");
+    if (startDateErr) {
+      setFormError(startDateErr);
+      toast.error(startDateErr);
+      setSubmitting(false);
+      return;
+    }
+
+    if (payload.end_date && (payload.end_date as string) <= (payload.start_date as string)) {
+      const msg = "End date must be after start date.";
+      setFormError(msg);
+      toast.error(msg);
       setSubmitting(false);
       return;
     }
@@ -198,7 +228,8 @@ export function BillPaymentForm() {
               <Input
                 name="start_date"
                 type="date"
-                className="border-white/10 bg-white/5 text-xs focus:border-cyan-400"
+                min={todayStr}
+                className="bg-white/5 border-white/10 text-xs focus:border-cyan-400"
                 required
               />
             </div>
@@ -207,10 +238,17 @@ export function BillPaymentForm() {
               <Input
                 name="end_date"
                 type="date"
-                className="border-white/10 bg-white/5 text-xs focus:border-cyan-400"
+                min={todayStr}
+                className="bg-white/5 border-white/10 text-xs focus:border-cyan-400"
               />
             </div>
           </div>
+
+          {formError && (
+            <p role="alert" className="text-sm text-red-400 font-medium">
+              {formError}
+            </p>
+          )}
 
           <Button
             type="submit"

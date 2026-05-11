@@ -5,6 +5,7 @@ import { getOrCreateCashboxForCustomer } from "@/lib/banking/cashbox";
 import { parseCurrencyInput } from "@/lib/banking/amount";
 import { isDepositEligible } from "@/lib/banking/rules";
 import { roundCurrency } from "@/lib/banking/rules";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,11 @@ export async function POST(request: Request) {
     }
 
     const amount = parsedAmount.value;
+
+    const amountError = validateMoneyAmount(amount);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
+    }
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")

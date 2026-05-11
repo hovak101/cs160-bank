@@ -65,6 +65,27 @@ export async function POST(req: Request) {
     }
 
     const amountValue = parsedAmount.value;
+    if (amountValue > 5000) {
+      return NextResponse.json(
+        { error: "Cheque deposits are limited to $5,000." },
+        { status: 400 }
+      );
+    }
+
+    const allowedChequeTypes = ["image/jpeg", "image/png"];
+    if (!allowedChequeTypes.includes(chequeImage.type)) {
+      return NextResponse.json(
+        { error: "Cheque image must be a JPEG or PNG." },
+        { status: 400 }
+      );
+    }
+
+    if (chequeImage.size > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "Cheque image must be 5MB or smaller." },
+        { status: 400 }
+      );
+    }
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")

@@ -8,6 +8,7 @@ import {
   getRemainingSavingsWithdrawalAllowance,
 } from "@/lib/banking/server";
 import { roundCurrency } from "@/lib/banking/rules";
+import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,11 @@ export async function POST(request: Request) {
     }
 
     const amount = parsedAmount.value;
+
+    const amountError = validateMoneyAmount(amount);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
+    }
 
     const { data: senderCustomer, error: senderCustomerError } = await supabaseAdmin
       .from("customers")
@@ -224,10 +230,18 @@ export async function POST(request: Request) {
       .eq("cashbox_id", receiverCashbox.cashbox_id);
 
     if (updateCashboxError) {
+      const { data: currentSourceAccount } = await supabaseAdmin
+        .from("accounts")
+        .select("balance")
+        .eq("account_id", sourceAccount.account_id)
+        .single();
+
+      const currentBalance = Number(currentSourceAccount?.balance ?? newSourceBalance);
+
       await supabaseAdmin
         .from("accounts")
         .update({
-          balance: Number(sourceAccount.balance),
+          balance: currentBalance + amount,
           updated_at: new Date().toISOString(),
         })
         .eq("account_id", sourceAccount.account_id);
