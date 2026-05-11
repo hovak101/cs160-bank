@@ -136,35 +136,35 @@ export async function ManagerDashboardStats() {
 
         <div className="rounded-[28px] border border-white/10 bg-[#0f172a] p-6 shadow-xl">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm text-slate-400">Transaction Volume</p>
-              <h3 className="mt-3 text-4xl font-bold text-white">
+              <h3 className="mt-3 text-4xl font-bold text-white truncate" title={formatCurrency(currentVolume)}>
                 {formatCurrency(currentVolume)}
               </h3>
             </div>
 
-            <div className="rounded-2xl bg-cyan-400/10 p-3">
+            <div className="rounded-2xl bg-cyan-400/10 p-3 shrink-0">
               <Activity className="h-5 w-5 text-cyan-400" />
             </div>
           </div>
 
           <div className="mt-5 space-y-2 text-sm">
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="inline-flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 text-slate-300">
+              <span className="inline-flex items-center gap-2 shrink-0">
                 <ArrowDownLeft className="h-4 w-4 text-emerald-400" />
                 Deposits
               </span>
-              <span className="font-semibold text-emerald-400">
+              <span className="font-semibold text-emerald-400 truncate" title={formatCurrency(currentDeposits)}>
                 {formatCurrency(currentDeposits)}
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="inline-flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 text-slate-300">
+              <span className="inline-flex items-center gap-2 shrink-0">
                 <ArrowUpRight className="h-4 w-4 text-amber-400" />
                 Withdrawals
               </span>
-              <span className="font-semibold text-amber-400">
+              <span className="font-semibold text-amber-400 truncate" title={formatCurrency(currentWithdrawals)}>
                 {formatCurrency(currentWithdrawals)}
               </span>
             </div>
@@ -325,12 +325,10 @@ function StatCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm text-slate-400">{title}</p>
-          <h3 className="mt-3 overflow-hidden text-[clamp(1.75rem,4vw,2.25rem)] font-bold text-white break-words">
-            {value}
-          </h3>
+          <h3 className="mt-3 text-4xl font-bold text-white truncate" title={value}>{value}</h3>
           <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
         </div>
-        <div className="rounded-2xl bg-cyan-400/10 p-3">{icon}</div>
+        <div className="rounded-2xl bg-cyan-400/10 p-3 shrink-0">{icon}</div>
       </div>
     </div>
   );
@@ -352,12 +350,10 @@ function InsightCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm text-slate-400">{title}</p>
-          <h4 className="mt-3 overflow-hidden text-[clamp(1.5rem,3.6vw,1.875rem)] font-bold text-white break-words">
-            {value}
-          </h4>
+          <h4 className="mt-3 text-3xl font-bold text-white truncate" title={value}>{value}</h4>
           <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
         </div>
-        <div className="rounded-2xl bg-cyan-400/10 p-3">{icon}</div>
+        <div className="rounded-2xl bg-cyan-400/10 p-3 shrink-0">{icon}</div>
       </div>
     </div>
   );

@@ -130,7 +130,23 @@ async function processOnePayment(
     .single();
 
   if (!fromAccount || fromAccount.status !== "active") {
-    await stopSchedule(supabase, schedule, "cancelled", "source_account_inactive");
+    // Log a failed transaction so the attempt is visible in the account's transaction history
+    const { data: failedTxn } = await supabase
+      .from("transactions")
+      .insert({
+        reference_number: `BP-FAIL-${Date.now()}`,
+        source_account_id: schedule.account_id,
+        destination_account_id: schedule.payee_id,
+        amount: schedule.amount,
+        transaction_type: "bill_payment",
+        status: "failed",
+        description: `Bill payment failed: ${schedule.nickname} - source account is closed or inactive`,
+        executed_at: new Date().toISOString(),
+      })
+      .select("transaction_id")
+      .single();
+
+    await stopSchedule(supabase, schedule, "cancelled", "source_account_inactive", failedTxn?.transaction_id ?? null);
     return;
   }
 
@@ -142,7 +158,7 @@ async function processOnePayment(
     await supabase
       .from("bill_schedules")
       .update({
-        next_payment_date: nextPaymentDate,
+        ...(scheduleIsDone ? {} : { next_payment_date: nextPaymentDate }),
         status: scheduleIsDone ? "completed" : "active",
       })
       .eq("schedule_id", schedule.schedule_id);
@@ -202,7 +218,7 @@ async function processOnePayment(
   await supabase
     .from("bill_schedules")
     .update({
-      next_payment_date: nextPaymentDate,
+      ...(scheduleIsDone ? {} : { next_payment_date: nextPaymentDate }),
       status: scheduleIsDone ? "completed" : "active",
     })
     .eq("schedule_id", schedule.schedule_id);
@@ -212,7 +228,8 @@ async function stopSchedule(
   supabase: ServiceSupabase,
   schedule: Pick<BillScheduleRow, "schedule_id" | "next_payment_date">,
   nextStatus: "cancelled" | "completed",
-  failureReason?: string | null
+  failureReason?: string | null,
+  transactionId?: string | null
 ) {
   await supabase
     .from("bill_schedules")
@@ -220,7 +237,7 @@ async function stopSchedule(
     .eq("schedule_id", schedule.schedule_id);
 
   if (failureReason) {
-    await recordExecution(supabase, schedule, "failed", failureReason);
+    await recordExecution(supabase, schedule, "failed", failureReason, transactionId ?? null);
   }
 }
 

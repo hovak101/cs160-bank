@@ -47,7 +47,8 @@ export function BillPaymentForm() {
           const { data: accountsData } = await supabase
             .from("accounts")
             .select("account_id, account_name, account_number, account_type")
-            .eq("customer_id", customer.customer_id);
+            .eq("customer_id", customer.customer_id)
+            .eq("status", "active");
 
           setAccounts(
             (accountsData || []).filter((account) =>

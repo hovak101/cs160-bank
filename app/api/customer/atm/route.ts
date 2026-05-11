@@ -75,6 +75,9 @@ export async function POST(request: Request) {
     const providedAtmName = String(body.atm_name ?? "").trim();
     const providedAtmLocation = String(body.atm_location ?? "").trim();
     const action = String(body.action ?? "").trim().toLowerCase() as AtmAction;
+    if (!/^\d+(\.\d{1,2})?$/.test(String(body.amount ?? ""))) {
+      return NextResponse.json({ error: "Amount must have at most 2 decimal places." }, { status: 400 });
+    }
     const securityCode = normalizeSecurityCode(body.security_code);
 
     if (!atmId) {

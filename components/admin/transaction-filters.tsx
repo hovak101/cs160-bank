@@ -33,26 +33,19 @@ export function TransactionFilters({
   const [isOpen, setIsOpen] = useState(false);
   const [dateSort, setDateSort] = useState<"asc" | "desc">(initialFilters?.dateSort || "desc");
   const [specificDate, setSpecificDate] = useState(initialFilters?.specificDate || "");
-  const [minAmount, setMinAmount] = useState(
-    initialFilters?.minAmountDisplay !== undefined
-      ? String(initialFilters.minAmountDisplay)
-      : minAmountThreshold > 0
-      ? String(minAmountThreshold)
-      : ""
-  );
-  const [maxAmount, setMaxAmount] = useState(
-    initialFilters?.maxAmount !== undefined ? String(initialFilters.maxAmount) : ""
-  );
+  const [minAmount, setMinAmount] = useState(initialFilters?.minAmountDisplay ? String(initialFilters.minAmountDisplay) : "");
+  const [maxAmount, setMaxAmount] = useState(initialFilters?.maxAmount || "");
   const [transactionType, setTransactionType] = useState(initialFilters?.transactionType || "");
   const [transactionStatus, setTransactionStatus] = useState(initialFilters?.transactionStatus || "");
   const [cashboxOnly, setCashboxOnly] = useState(initialFilters?.cashboxOnly || false);
+  const [amountError, setAmountError] = useState("");
 
   // Keep internal state in sync when the parent resets/updates initialFilters
   // (e.g. the page-level Clear button), so hasActiveFilters reflects reality.
   useEffect(() => {
     setDateSort(initialFilters?.dateSort || "desc");
     setSpecificDate(initialFilters?.specificDate || "");
-    setMinAmount(initialFilters?.minAmountDisplay !== undefined ? String(initialFilters.minAmountDisplay) : minAmountThreshold > 0 ? String(minAmountThreshold) : "");
+    setMinAmount(initialFilters?.minAmountDisplay ? String(initialFilters.minAmountDisplay) : "");
     setMaxAmount(initialFilters?.maxAmount ? String(initialFilters.maxAmount) : "");
     setTransactionType(initialFilters?.transactionType || "");
     setTransactionStatus(initialFilters?.transactionStatus || "");
@@ -69,20 +62,22 @@ export function TransactionFilters({
   ]);
 
   const handleApplyFilters = () => {
+    const minParsed = parseFloat(minAmount as string);
+    const maxParsed = parseFloat(maxAmount as string);
+    if (Number.isFinite(minParsed) && Number.isFinite(maxParsed) && minParsed > maxParsed) {
+      setAmountError("Minimum amount cannot be greater than maximum amount.");
+      return;
+    }
+    setAmountError("");
     const filters: TransactionFilters = {
       dateSort,
     };
 
     if (specificDate) filters.specificDate = specificDate;
-    const parsedMinAmount = Number(minAmount);
-    const parsedMaxAmount = Number(maxAmount);
-
-    if (minAmount !== "" && Number.isFinite(parsedMinAmount) && parsedMinAmount > 0) {
-      filters.minAmountDisplay = parsedMinAmount;
-      filters.minAmount = parsedMinAmount;
-    }
-    if (maxAmount !== "" && Number.isFinite(parsedMaxAmount) && parsedMaxAmount >= 0) {
-      filters.maxAmount = parsedMaxAmount;
+    const minAmountParsed = parseFloat(minAmount as string);
+    if (Number.isFinite(minAmountParsed) && minAmountParsed > 0) {
+      filters.minAmountDisplay = minAmountParsed;
+      filters.minAmount = minAmountParsed;
     }
     if (cashboxOnly) filters.cashboxOnly = true;
     if (showTransactionType && transactionType) filters.transactionType = transactionType;
@@ -118,6 +113,7 @@ export function TransactionFilters({
     transactionStatus ||
     (showTransactionType && transactionType) ||
     (minAmount !== "" && Number(minAmount) > minAmountThreshold);
+    parseFloat(minAmount as string) > minAmountThreshold;
 
   return (
     <div className="relative">
@@ -173,8 +169,10 @@ export function TransactionFilters({
               <input
                 type="number"
                 value={minAmount}
-                onChange={(e) => {
-                  setMinAmount(e.target.value);
+                onChange={(e) => { setMinAmount(e.target.value); setAmountError(""); }}
+                onBlur={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v)) setMinAmount((Math.round(v * 100) / 100).toString());
                 }}
                 min={minAmountThreshold}
                 step="0.01"
@@ -190,8 +188,10 @@ export function TransactionFilters({
               <input
                 type="number"
                 value={maxAmount}
-                onChange={(e) => {
-                  setMaxAmount(e.target.value);
+                onChange={(e) => { setMaxAmount(e.target.value); setAmountError(""); }}
+                onBlur={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v)) setMaxAmount((Math.round(v * 100) / 100).toString());
                 }}
                 min="0"
                 step="0.01"
@@ -199,6 +199,10 @@ export function TransactionFilters({
                 className="w-full rounded-lg border border-slate-600 bg-[#081328] px-3 py-2 text-white outline-none focus:border-cyan-400"
               />
             </div>
+
+            {amountError && (
+              <p className="text-xs text-red-400">{amountError}</p>
+            )}
 
             {/* Cashbox Only Checkbox */}
             {showCashboxFilter && (

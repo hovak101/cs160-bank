@@ -31,6 +31,7 @@ export function parseCurrencyInput(
   const fieldLabel = options.fieldLabel ?? "Amount";
   const min = options.min ?? 0.01;
 
+  // Handle null/undefined
   if (rawValue === null || rawValue === undefined) {
     return {
       ok: false,
@@ -38,9 +39,15 @@ export function parseCurrencyInput(
     };
   }
 
-  const value =
-    typeof rawValue === "number" ? String(rawValue) : String(rawValue).trim();
+  // Normalize input: convert to string, trim, remove $ and commas
+  let value = "";
+  if (typeof rawValue === "number") {
+    value = String(rawValue);
+  } else {
+    value = String(rawValue).trim().replace(/^\$/, "").replace(/,/g, "");
+  }
 
+  // Check if empty after normalization
   if (!value) {
     return {
       ok: false,
@@ -48,6 +55,7 @@ export function parseCurrencyInput(
     };
   }
 
+  // Validate format: must be digits with optional 2 decimal places
   if (!CURRENCY_INPUT_PATTERN.test(value)) {
     return {
       ok: false,
@@ -55,9 +63,11 @@ export function parseCurrencyInput(
     };
   }
 
+  // Convert to cents and back to dollars
   const cents = currencyStringToCents(value);
   const parsed = cents / 100;
 
+  // Check if number is finite
   if (!Number.isFinite(parsed)) {
     return {
       ok: false,
@@ -65,8 +75,10 @@ export function parseCurrencyInput(
     };
   }
 
+  // Round to nearest cent
   const normalized = roundCurrency(parsed);
 
+  // Check minimum value
   if (normalized < min) {
     return {
       ok: false,
@@ -74,6 +86,7 @@ export function parseCurrencyInput(
     };
   }
 
+  // Check maximum value if provided
   if (typeof options.max === "number" && normalized > options.max) {
     return {
       ok: false,
