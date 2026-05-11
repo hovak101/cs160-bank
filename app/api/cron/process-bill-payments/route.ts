@@ -158,7 +158,7 @@ async function processOnePayment(
     await supabase
       .from("bill_schedules")
       .update({
-        next_payment_date: nextPaymentDate,
+        ...(scheduleIsDone ? {} : { next_payment_date: nextPaymentDate }),
         status: scheduleIsDone ? "completed" : "active",
       })
       .eq("schedule_id", schedule.schedule_id);
@@ -218,7 +218,7 @@ async function processOnePayment(
   await supabase
     .from("bill_schedules")
     .update({
-      next_payment_date: nextPaymentDate,
+      ...(scheduleIsDone ? {} : { next_payment_date: nextPaymentDate }),
       status: scheduleIsDone ? "completed" : "active",
     })
     .eq("schedule_id", schedule.schedule_id);
