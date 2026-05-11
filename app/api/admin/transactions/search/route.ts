@@ -147,16 +147,15 @@ export async function GET(req: NextRequest) {
       filterQuery = filterQuery.lte("amount", parseFloat(maxAmount));
     }
 
-    // Get total count
-    const { count: totalCount } = await filterQuery;
-    const total = totalCount || 0;
-    const totalPages = Math.ceil(total / pageSize);
-
     // Fetch paginated results with sorting
     const sortAscending = dateSort === "asc";
     const { data: transactions, error } = await filterQuery
       .order("executed_at", { ascending: sortAscending })
       .range((page - 1) * pageSize, page * pageSize - 1);
+
+    const { count: totalCount } = await filterQuery;
+    const total = totalCount || 0;
+    const totalPages = Math.ceil(total / pageSize);
 
     if (error) {
       return NextResponse.json(

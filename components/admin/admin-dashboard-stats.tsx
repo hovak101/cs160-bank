@@ -625,12 +625,12 @@ function SummaryStatCard({
   return (
     <div className="rounded-[24px] border border-white/10 bg-[#0c162a] p-5 shadow-xl">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm text-slate-400">{title}</p>
-          <h3 className="mt-2 text-2xl font-bold text-white">{value}</h3>
+          <h3 className="mt-2 truncate text-2xl font-bold text-white" title={value}>{value}</h3>
           <p className="mt-1.5 text-sm text-slate-500">{subtitle}</p>
         </div>
-        <div className="rounded-2xl bg-cyan-400/10 p-3">{icon}</div>
+        <div className="shrink-0 rounded-2xl bg-cyan-400/10 p-3">{icon}</div>
       </div>
     </div>
   );
@@ -646,9 +646,9 @@ function CompactMetric({
   accent?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-2 text-xl font-bold ${accent}`}>{value}</p>
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+      <p className="truncate text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-2 truncate text-xl font-bold ${accent}`} title={value}>{value}</p>
     </div>
   );
 }
@@ -672,9 +672,9 @@ function KpiMiniCard({
           : "text-white";
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-2 text-2xl font-bold ${toneClass}`}>{value}</p>
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+      <p className="truncate text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-2 truncate text-2xl font-bold ${toneClass}`} title={value}>{value}</p>
     </div>
   );
 }
