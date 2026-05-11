@@ -125,7 +125,9 @@ export function BillPaymentList() {
                         </span>
                       </td>
                       <td className="px-6 py-4 font-mono text-xs text-slate-400">
-                        {schedule.next_payment_date ?? "-"}
+                        {schedule.status === "completed" || schedule.status === "cancelled"
+                          ? <span className="text-slate-500 italic">Done</span>
+                          : schedule.next_payment_date ?? "-"}
                       </td>
                       <td className="px-6 py-4">
                         <p
