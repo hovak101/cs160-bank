@@ -1,11 +1,25 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { timingSafeEqual } from "crypto";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { roundCurrency } from "@/lib/banking/rules";
+import type { Database, Tables } from "@/lib/supabase/database.types";
+
+type BillScheduleRow = Tables<"bill_schedules">;
+type BillSchedule = BillScheduleRow & {
+  account_id: string;
+  payee_id: string;
+  amount: number;
+  frequency: string;
+  next_payment_date: string;
+};
+
+type ServiceSupabase = SupabaseClient<Database>;
 import { todayInBankTz } from "@/lib/banking/clock";
 
 // this runs every day at 8am via vercel cron
 // it finds all payments that are due and processes them
-// (deduct from payer, credit payee — both are internal accounts).
+// (deduct from payer, credit payee - both are internal accounts).
 export async function POST(request: Request) {
   const cronSecret = process.env.NEXT_PUBLIC_CRON_SECRET;
   if (!cronSecret) {
@@ -13,15 +27,39 @@ export async function POST(request: Request) {
   }
 
   const authHeader = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${cronSecret}`;
-  const a = Buffer.from(authHeader);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let authorizedByCronSecret = false;
+
+  if (authHeader) {
+    const expected = `Bearer ${cronSecret}`;
+    const a = Buffer.from(authHeader);
+    const b = Buffer.from(expected);
+    authorizedByCronSecret = a.length === b.length && timingSafeEqual(a, b);
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  if (!authorizedByCronSecret) {
+    const supabaseSession = await createServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseSession.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: userData } = await supabaseSession
+      .from("users")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!["customer", "manager", "admin"].includes(userData?.role ?? "")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  const supabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
@@ -42,15 +80,41 @@ export async function POST(request: Request) {
   }
 
   for (const schedule of dueSchedules) {
-    await processOnePayment(supabase, schedule, today);
+    if (
+      !schedule.account_id ||
+      !schedule.payee_id ||
+      schedule.amount == null ||
+      !schedule.frequency ||
+      !schedule.next_payment_date
+    ) {
+      await stopSchedule(supabase, schedule, "cancelled", "invalid_schedule");
+      continue;
+    }
+
+    await processOnePayment(
+      supabase,
+      {
+        ...schedule,
+        account_id: schedule.account_id,
+        payee_id: schedule.payee_id,
+        amount: Number(schedule.amount),
+        frequency: schedule.frequency,
+        next_payment_date: schedule.next_payment_date,
+      },
+      today
+    );
   }
 
-  return NextResponse.json({ message: `Processed ${dueSchedules.length} payment(s).` });
+  return NextResponse.json({
+    message: `Processed ${dueSchedules.length} payment(s).`,
+  });
 }
 
-async function processOnePayment(supabase: any, schedule: any, today: string) {
-
-  // Past end date, mark completed
+async function processOnePayment(
+  supabase: ServiceSupabase,
+  schedule: BillSchedule,
+  today: string
+) {
   if (schedule.end_date && schedule.end_date < today) {
     await supabase
       .from("bill_schedules")
@@ -59,7 +123,6 @@ async function processOnePayment(supabase: any, schedule: any, today: string) {
     return;
   }
 
-  // Look up source account
   const { data: fromAccount } = await supabase
     .from("accounts")
     .select("balance, status")
@@ -67,37 +130,41 @@ async function processOnePayment(supabase: any, schedule: any, today: string) {
     .single();
 
   if (!fromAccount || fromAccount.status !== "active") {
-    await cancelSchedule(supabase, schedule.schedule_id);
+    // Log a failed transaction so the attempt is visible in the account's transaction history
+    const { data: failedTxn } = await supabase
+      .from("transactions")
+      .insert({
+        reference_number: `BP-FAIL-${Date.now()}`,
+        source_account_id: schedule.account_id,
+        destination_account_id: schedule.payee_id,
+        amount: schedule.amount,
+        transaction_type: "bill_payment",
+        status: "failed",
+        description: `Bill payment failed: ${schedule.nickname} - source account is closed or inactive`,
+        executed_at: new Date().toISOString(),
+      })
+      .select("transaction_id")
+      .single();
+
+    await stopSchedule(supabase, schedule, "cancelled", "source_account_inactive", failedTxn?.transaction_id ?? null);
     return;
   }
 
-  // Insufficient funds: log the failed cycle but keep the schedule active.
-  // Advance next_payment_date by one frequency unit so the cron doesn't retry
-  // the same failing date on every tick — the user fixes their balance and the
-  // next cycle runs normally.
   if (Number(fromAccount.balance) < Number(schedule.amount)) {
-    await supabase.from("payment_executions").insert({
-      schedule_id: schedule.schedule_id,
-      scheduled_date: schedule.next_payment_date,
-      actual_execution_at: new Date().toISOString(),
-      status: "failed",
-      failure_reason: "insufficient_funds",
-      retry_count: 0,
-    });
+    await recordExecution(supabase, schedule, "failed", "insufficient_funds");
 
     const nextPaymentDate = getNextDate(schedule.next_payment_date, schedule.frequency);
     const scheduleIsDone = schedule.end_date && nextPaymentDate > schedule.end_date;
     await supabase
       .from("bill_schedules")
       .update({
-        next_payment_date: nextPaymentDate,
+        ...(scheduleIsDone ? {} : { next_payment_date: nextPaymentDate }),
         status: scheduleIsDone ? "completed" : "active",
       })
       .eq("schedule_id", schedule.schedule_id);
     return;
   }
 
-  // Look up payee account, resolved from account number at schedule creation
   const { data: toAccount } = await supabase
     .from("accounts")
     .select("balance, status")
@@ -105,23 +172,20 @@ async function processOnePayment(supabase: any, schedule: any, today: string) {
     .single();
 
   if (!toAccount || toAccount.status !== "active") {
-    await cancelSchedule(supabase, schedule.schedule_id);
+    await stopSchedule(supabase, schedule, "cancelled", "payee_account_inactive");
     return;
   }
 
-  // Deduct from payer
   await supabase
     .from("accounts")
-    .update({ balance: fromAccount.balance - schedule.amount })
+    .update({ balance: roundCurrency(fromAccount.balance - schedule.amount) })
     .eq("account_id", schedule.account_id);
 
-  // Send to payee
   await supabase
     .from("accounts")
-    .update({ balance: toAccount.balance + schedule.amount })
+    .update({ balance: roundCurrency(toAccount.balance + schedule.amount) })
     .eq("account_id", schedule.payee_id);
 
-  // Record bill_payment
   const { data: txn } = await supabase
     .from("transactions")
     .insert({
@@ -137,40 +201,69 @@ async function processOnePayment(supabase: any, schedule: any, today: string) {
     .select("transaction_id")
     .single();
 
-  await supabase.from("payment_executions").insert({
-    schedule_id: schedule.schedule_id,
-    transaction_id: txn ? txn.transaction_id : null,
-    scheduled_date: schedule.next_payment_date,
-    actual_execution_at: new Date().toISOString(),
-    status: "success",
-    retry_count: 0,
-  });
+  await recordExecution(
+    supabase,
+    schedule,
+    "success",
+    null,
+    txn ? txn.transaction_id : null
+  );
 
-  // Get to next payment date
-  const nextPaymentDate = getNextDate(schedule.next_payment_date, schedule.frequency);
+  const nextPaymentDate = getNextDate(
+    schedule.next_payment_date,
+    schedule.frequency
+  );
   const scheduleIsDone = schedule.end_date && nextPaymentDate > schedule.end_date;
 
   await supabase
     .from("bill_schedules")
     .update({
-      next_payment_date: nextPaymentDate,
+      ...(scheduleIsDone ? {} : { next_payment_date: nextPaymentDate }),
       status: scheduleIsDone ? "completed" : "active",
     })
     .eq("schedule_id", schedule.schedule_id);
 }
 
-async function cancelSchedule(supabase: any, scheduleId: string) {
+async function stopSchedule(
+  supabase: ServiceSupabase,
+  schedule: Pick<BillScheduleRow, "schedule_id" | "next_payment_date">,
+  nextStatus: "cancelled" | "completed",
+  failureReason?: string | null,
+  transactionId?: string | null
+) {
   await supabase
     .from("bill_schedules")
-    .update({ status: "cancelled" })
-    .eq("schedule_id", scheduleId);
+    .update({ status: nextStatus })
+    .eq("schedule_id", schedule.schedule_id);
+
+  if (failureReason) {
+    await recordExecution(supabase, schedule, "failed", failureReason, transactionId ?? null);
+  }
+}
+
+async function recordExecution(
+  supabase: ServiceSupabase,
+  schedule: Pick<BillScheduleRow, "schedule_id" | "next_payment_date">,
+  status: "failed" | "success",
+  failureReason?: string | null,
+  transactionId?: string | null
+) {
+  await supabase.from("payment_executions").insert({
+    schedule_id: schedule.schedule_id,
+    transaction_id: transactionId ?? null,
+    scheduled_date: schedule.next_payment_date ?? new Date().toISOString().split("T")[0],
+    actual_execution_at: new Date().toISOString(),
+    status,
+    failure_reason: failureReason ?? null,
+    retry_count: 0,
+  });
 }
 
 function getNextDate(currentDate: string, frequency: string): string {
   const date = new Date(currentDate);
-  if (frequency === "weekly")    date.setDate(date.getDate() + 7);
+  if (frequency === "weekly") date.setDate(date.getDate() + 7);
   if (frequency === "bi-weekly") date.setDate(date.getDate() + 14);
-  if (frequency === "monthly")   date.setMonth(date.getMonth() + 1);
-  if (frequency === "annually")  date.setFullYear(date.getFullYear() + 1);
+  if (frequency === "monthly") date.setMonth(date.getMonth() + 1);
+  if (frequency === "annually") date.setFullYear(date.getFullYear() + 1);
   return date.toISOString().split("T")[0];
 }
