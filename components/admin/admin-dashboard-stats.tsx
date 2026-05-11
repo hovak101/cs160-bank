@@ -71,19 +71,22 @@ export async function AdminDashboardStats() {
       .select("amount, transaction_type, executed_at")
       .gte("executed_at", currentMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     supabase
       .from("transactions")
       .select("amount, transaction_type, executed_at")
       .gte("executed_at", previousMonthStart.toISOString())
       .lt("executed_at", currentMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     supabase
       .from("transactions")
       .select("amount, transaction_type, executed_at")
       .gte("executed_at", sixMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("bank_income")

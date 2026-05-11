@@ -48,19 +48,22 @@ export async function ManagerDashboardStats() {
       .select("amount, transaction_type, status, executed_at")
       .gte("executed_at", currentMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     supabase
       .from("transactions")
       .select("amount, transaction_type, status, executed_at")
       .gte("executed_at", previousMonthStart.toISOString())
       .lt("executed_at", currentMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     supabase
       .from("transactions")
       .select("amount, transaction_type, status, executed_at")
       .gte("executed_at", sixMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     supabase
       .from("transactions")
       .select("*", { count: "exact", head: true })
