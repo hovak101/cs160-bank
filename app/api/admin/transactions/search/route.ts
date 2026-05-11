@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       .from("transactions")
       .select(
         "transaction_id, reference_number, source_account_id, destination_account_id, amount, transaction_type, status, description, executed_at",
-        { count: "exact" }
+        { count: "estimated" }
       )
       .gte("executed_at", dateRangeStart.toISOString())
       .lte("executed_at", dateRangeEnd.toISOString());
