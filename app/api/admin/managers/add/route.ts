@@ -19,7 +19,7 @@ function generateUniqueEmployeeId(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireRole(["admin", "manager"]);
+    const auth = await requireRole(["admin"]);
     if (!auth.ok) return auth.response;
     const { supabase } = auth;
     try {

@@ -70,6 +70,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Amount must be greater than 0." }, { status: 400 });
   }
 
+  if (!/^\d+(\.\d{1,2})?$/.test(String(amount))) {
+    return NextResponse.json({ error: "Amount must have at most 2 decimal places." }, { status: 400 });
+  }
+
   const amountError = validateMoneyAmount(Number(amount));
   if (amountError) {
     return NextResponse.json({ error: amountError }, { status: 400 });
