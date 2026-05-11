@@ -28,10 +28,13 @@ export async function POST(request: Request) {
     const accountId = String(body.account_id ?? "").trim();
     const merchant = String(body.merchant ?? "").trim();
     const category = String(body.category ?? "").trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(String(body.amount ?? ""))) {
+      return NextResponse.json({ error: "Amount must have at most 2 decimal places." }, { status: 400 });
+    }
     const amount = Number(body.amount ?? 0);
     const securityCode = normalizeSecurityCode(body.security_code);
 
-    if (!accountId || !merchant || !Number.isFinite(amount) || amount <= 0) {
+    if (!accountId || !merchant || !Number.isFinite(amount) || amount < 0.01) {
       return NextResponse.json(
         { error: "Credit account, merchant, and valid amount are required." },
         { status: 400 }

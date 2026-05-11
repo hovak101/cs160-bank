@@ -29,7 +29,11 @@ export async function POST(req: Request) {
     
     const formData = await req.formData();
     const accountId = String(formData.get("account_id") || "");
-    const amountValue = Number(formData.get("amount"));
+    const rawAmount = String(formData.get("amount") ?? "");
+    if (!/^\d+(\.\d{1,2})?$/.test(rawAmount)) {
+      return NextResponse.json({ error: "Amount must have at most 2 decimal places." }, { status: 400 });
+    }
+    const amountValue = Number(rawAmount);
     const chequeImage = formData.get("cheque_image") as File | null;
 
     if (!chequeImage) {
