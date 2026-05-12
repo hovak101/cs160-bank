@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: receiverCustomer, error: receiverError } = await supabase
+    const { data: receiverCustomer, error: receiverError } = await supabaseAdmin
       .from("customers")
       .select("customer_id, first_name, last_name, phone_number")
       .eq("phone_number", phone_number)

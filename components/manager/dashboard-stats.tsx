@@ -39,6 +39,7 @@ export async function ManagerDashboardStats() {
     { data: currentTxData },
     { data: previousTxData },
     { data: sixMonthTxData },
+    { count: completedTransactionCount },
   ] = await Promise.all([
     supabase.from("customers").select("customer_id"),
     supabase.from("accounts").select("account_id, balance, account_type"),
@@ -47,17 +48,26 @@ export async function ManagerDashboardStats() {
       .select("amount, transaction_type, status, executed_at")
       .gte("executed_at", currentMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     supabase
       .from("transactions")
       .select("amount, transaction_type, status, executed_at")
       .gte("executed_at", previousMonthStart.toISOString())
       .lt("executed_at", currentMonthStart.toISOString())
-      .eq("status", "completed"),
+      .eq("status", "completed")
+      .limit(50000),
     supabase
       .from("transactions")
       .select("amount, transaction_type, status, executed_at")
       .gte("executed_at", sixMonthStart.toISOString())
+      .lt("executed_at", nextMonthStart.toISOString())
+      .eq("status", "completed")
+      .limit(50000),
+    supabase
+      .from("transactions")
+      .select("*", { count: "exact", head: true })
+      .gte("executed_at", currentMonthStart.toISOString())
       .lt("executed_at", nextMonthStart.toISOString())
       .eq("status", "completed"),
   ]);
@@ -99,8 +109,6 @@ export async function ManagerDashboardStats() {
 
   const monthlyBars = buildMonthlySeries(sixMonthTx);
   const accountMix = buildAccountMix(accounts);
-
-  const completedTransactionCount = currentTx.length;
 
   return (
     <div className="space-y-6">
@@ -168,7 +176,7 @@ export async function ManagerDashboardStats() {
                 growth >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
-              {growth >= 0 ? "↑" : "↓"} {Math.abs(growth).toFixed(1)}% vs last month
+              {growth >= 0 ? "+" : "-"}{Math.abs(growth).toFixed(1)}% vs last month
             </p>
             <p className="mt-1 text-xs text-slate-500">
               Last month volume: {formatCurrency(previousVolume)}
@@ -285,7 +293,7 @@ export async function ManagerDashboardStats() {
 
         <InsightCard
           title="Completed Transactions"
-          value={String(completedTransactionCount)}
+          value={formatCountNumber(completedTransactionCount ?? 0)}
           subtitle="Completed this month"
           icon={<CheckCircle2 className="h-5 w-5 text-cyan-400" />}
         />
@@ -493,4 +501,10 @@ function formatCurrency(amount: number) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(Number(amount || 0));
+}
+
+function formatCountNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 }

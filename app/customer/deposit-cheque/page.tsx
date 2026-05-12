@@ -20,7 +20,7 @@ export default async function DepositChequePage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const { data: accounts } = await supabase
     .from("accounts")

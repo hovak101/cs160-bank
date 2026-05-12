@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getOrCreateCashboxForCustomer } from "@/lib/banking/cashbox";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 import { isDepositEligible } from "@/lib/banking/rules";
+import { roundCurrency } from "@/lib/banking/rules";
 import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
@@ -24,14 +28,22 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const target_account_id = String(body.target_account_id ?? "").trim();
-    const amount = Number(body.amount ?? 0);
+    const parsedAmount = parseCurrencyInput(body.amount, {
+      fieldLabel: "CashBox withdrawal amount",
+    });
 
-    if (!target_account_id || !Number.isFinite(amount) || amount <= 0) {
+    if (!target_account_id) {
       return NextResponse.json(
-        { error: "Target account and valid amount are required." },
+        { error: "Target account is required." },
         { status: 400 }
       );
     }
+
+    if (!parsedAmount.ok) {
+      return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
+    }
+
+    const amount = parsedAmount.value;
 
     const amountError = validateMoneyAmount(amount);
     if (amountError) {
@@ -51,31 +63,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let { data: cashbox } = await supabase
-      .from("cashboxes")
-      .select("cashbox_id, balance")
-      .eq("customer_id", customer.customer_id)
-      .maybeSingle();
-
-    if (!cashbox) {
-      const { data: createdCashbox, error: createCashboxError } = await supabase
-        .from("cashboxes")
-        .insert({
-          customer_id: customer.customer_id,
-          balance: 0,
-        })
-        .select("cashbox_id, balance")
-        .single();
-
-      if (createCashboxError || !createdCashbox) {
-        return NextResponse.json(
-          { error: "Failed to create CashBox." },
-          { status: 500 }
-        );
-      }
-
-      cashbox = createdCashbox;
-    }
+    const cashbox = await getOrCreateCashboxForCustomer(customer.customer_id);
 
     if (Number(cashbox.balance ?? 0) < amount) {
       return NextResponse.json(
@@ -117,15 +105,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const newCashboxBalance = Number(cashbox.balance) - amount;
-    const newAccountBalance = Number(targetAccount.balance ?? 0) + amount;
+    const newCashboxBalance = roundCurrency(Number(cashbox.balance) - amount);
+    const newAccountBalance = roundCurrency(
+      Number(targetAccount.balance ?? 0) + amount
+    );
     const referenceNumber = generateReferenceNumber();
 
     const destinationLabel = `${
       targetAccount.account_name || targetAccount.account_type || "Account"
     } • ****${targetAccount.account_number?.slice(-4) ?? ""}`;
 
-    const { error: updateCashboxError } = await supabase
+    const { error: updateCashboxError } = await supabaseAdmin
       .from("cashboxes")
       .update({
         balance: newCashboxBalance,
@@ -140,7 +130,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: updateAccountError } = await supabase
+    const { error: updateAccountError } = await supabaseAdmin
       .from("accounts")
       .update({
         balance: newAccountBalance,
@@ -149,7 +139,7 @@ export async function POST(request: Request) {
       .eq("account_id", targetAccount.account_id);
 
     if (updateAccountError) {
-      await supabase
+      await supabaseAdmin
         .from("cashboxes")
         .update({
           balance: Number(cashbox.balance),
@@ -163,7 +153,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: transactionError } = await supabase
+    const { error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: referenceNumber,

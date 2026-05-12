@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   buildStoredAtmTransactionDescription,
   canUseAtmDeposit,
@@ -8,6 +9,10 @@ import {
   getAtmAccountRestrictionMessage,
   getAtmAccountStatusErrorMessage,
 } from "@/lib/atm/demo";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+} from "@/lib/banking/amount";
 import {
   computeCreditCashAdvanceFee,
   computeCreditMinimumPayment,
@@ -23,6 +28,50 @@ import {
 import { recordBankIncomeTransactions } from "@/lib/banking/bank-income";
 
 export const dynamic = "force-dynamic";
+
+async function failPendingAtmSimulation(params: {
+  supabase: typeof supabaseAdmin;
+  simulationId: string;
+  transactionId: string;
+  action: "deposit" | "withdraw";
+  atmName: string;
+  atmLocation: string;
+  reason: string;
+  status?: number;
+}) {
+  const nowIso = new Date().toISOString();
+  const failedDescription = buildStoredAtmTransactionDescription(
+    params.action,
+    params.atmName,
+    params.atmLocation,
+    "failed"
+  );
+
+  await params.supabase
+    .from("transactions")
+    .update({
+      status: "failed",
+      description: failedDescription,
+      executed_at: nowIso,
+    })
+    .eq("status", "pending")
+    .eq("transaction_id", params.transactionId);
+
+  await params.supabase
+    .from("atm_simulations")
+    .update({
+      status: "failed",
+      completed_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("status", "pending")
+    .eq("atm_simulation_id", params.simulationId);
+
+  return NextResponse.json(
+    { error: params.reason },
+    { status: params.status ?? 400 }
+  );
+}
 
 export async function POST(
   _request: Request,
@@ -94,6 +143,8 @@ export async function POST(
       );
     }
 
+    const action = simulation.action === "deposit" ? "deposit" : "withdraw";
+
     const { data: account, error: accountError } = await supabase
       .from("accounts")
       .select(
@@ -104,18 +155,31 @@ export async function POST(
       .single();
 
     if (accountError || !account) {
-      return NextResponse.json(
-        { error: "The selected account could not be found." },
-        { status: 404 }
-      );
+      return failPendingAtmSimulation({
+        supabase: supabaseAdmin,
+        simulationId: simulation.atm_simulation_id,
+        transactionId: simulation.transaction_id,
+        action,
+        atmName: simulation.atm_name,
+        atmLocation: simulation.atm_location,
+        reason: "The selected account could not be found.",
+        status: 404,
+      });
     }
 
     const statusError = getAtmAccountStatusErrorMessage(account.status);
     if (statusError) {
-      return NextResponse.json({ error: statusError }, { status: 400 });
+      return failPendingAtmSimulation({
+        supabase: supabaseAdmin,
+        simulationId: simulation.atm_simulation_id,
+        transactionId: simulation.transaction_id,
+        action,
+        atmName: simulation.atm_name,
+        atmLocation: simulation.atm_location,
+        reason: statusError,
+      });
     }
 
-    const action = simulation.action === "deposit" ? "deposit" : "withdraw";
     const amount = Number(simulation.amount || 0);
     const nowIso = new Date().toISOString();
     const completedDescription = buildStoredAtmTransactionDescription(
@@ -129,10 +193,15 @@ export async function POST(
       action
     );
     if (accountRestrictionMessage) {
-      return NextResponse.json(
-        { error: accountRestrictionMessage },
-        { status: 400 }
-      );
+      return failPendingAtmSimulation({
+        supabase: supabaseAdmin,
+        simulationId: simulation.atm_simulation_id,
+        transactionId: simulation.transaction_id,
+        action,
+        atmName: simulation.atm_name,
+        atmLocation: simulation.atm_location,
+        reason: accountRestrictionMessage,
+      });
     }
 
     const { data: claimedSimulation, error: claimSimulationError } = await supabase
@@ -159,16 +228,33 @@ export async function POST(
     }
 
     if (action === "deposit") {
+      if (amount > MANUAL_DEPOSIT_LIMIT_USD) {
+        return failPendingAtmSimulation({
+          supabase: supabaseAdmin,
+          simulationId: simulation.atm_simulation_id,
+          transactionId: simulation.transaction_id,
+          action,
+          atmName: simulation.atm_name,
+          atmLocation: simulation.atm_location,
+          reason: LARGE_DEPOSIT_SUPPORT_MESSAGE,
+        });
+      }
+
       if (!canUseAtmDeposit(account.account_type)) {
-        return NextResponse.json(
-          { error: `${getAccountTypeLabel(account.account_type)} accounts cannot receive ATM deposits in this demo.` },
-          { status: 400 }
-        );
+        return failPendingAtmSimulation({
+          supabase: supabaseAdmin,
+          simulationId: simulation.atm_simulation_id,
+          transactionId: simulation.transaction_id,
+          action,
+          atmName: simulation.atm_name,
+          atmLocation: simulation.atm_location,
+          reason: `${getAccountTypeLabel(account.account_type)} accounts cannot receive ATM deposits in this demo.`,
+        });
       }
 
       const nextBalance = roundCurrency(Number(account.balance || 0) + amount);
 
-      const { error: updateAccountError } = await supabase
+      const { error: updateAccountError } = await supabaseAdmin
         .from("accounts")
         .update({
           balance: nextBalance,
@@ -184,10 +270,15 @@ export async function POST(
       }
     } else {
       if (!canUseAtmWithdrawal(account.account_type)) {
-        return NextResponse.json(
-          { error: `${getAccountTypeLabel(account.account_type)} accounts cannot be used for ATM withdrawals in this demo.` },
-          { status: 400 }
-        );
+        return failPendingAtmSimulation({
+          supabase: supabaseAdmin,
+          simulationId: simulation.atm_simulation_id,
+          transactionId: simulation.transaction_id,
+          action,
+          atmName: simulation.atm_name,
+          atmLocation: simulation.atm_location,
+          reason: `${getAccountTypeLabel(account.account_type)} accounts cannot be used for ATM withdrawals in this demo.`,
+        });
       }
 
       if (isCreditAccount(account.account_type)) {
@@ -200,10 +291,16 @@ export async function POST(
           .single();
 
         if (creditAccountError || !creditAccount) {
-          return NextResponse.json(
-            { error: "Credit account details not found." },
-            { status: 404 }
-          );
+          return failPendingAtmSimulation({
+            supabase: supabaseAdmin,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason: "Credit account details not found.",
+            status: 404,
+          });
         }
 
         const feeAmount = computeCreditCashAdvanceFee(amount);
@@ -215,24 +312,30 @@ export async function POST(
         );
 
         if (amount > cashAdvanceRemaining) {
-          return NextResponse.json(
-            {
-              error: `Cash advance limit exceeded. You can withdraw up to $${cashAdvanceRemaining.toFixed(
-                2
-              )} right now.`,
-            },
-            { status: 400 }
-          );
+          return failPendingAtmSimulation({
+            supabase: supabaseAdmin,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason: `Cash advance limit exceeded. You can withdraw up to $${cashAdvanceRemaining.toFixed(
+              2
+            )} right now.`,
+          });
         }
 
         if (amount + feeAmount > availableCredit) {
-          return NextResponse.json(
-            {
-              error:
-                "Insufficient available credit to cover the ATM cash advance and fee.",
-            },
-            { status: 400 }
-          );
+          return failPendingAtmSimulation({
+            supabase: supabaseAdmin,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason:
+              "Insufficient available credit to cover the ATM cash advance and fee.",
+          });
         }
 
         const nextCurrentBalance =
@@ -240,7 +343,7 @@ export async function POST(
         const nextCashAdvanceBalance =
           Number(creditAccount.cash_advance_balance || 0) + amount;
 
-        const { error: updateCreditError } = await supabase
+        const { error: updateCreditError } = await supabaseAdmin
           .from("credit_accounts")
           .update({
             current_balance: nextCurrentBalance,
@@ -258,7 +361,7 @@ export async function POST(
           );
         }
 
-        const { data: feeTransactionRows, error: feeTransactionError } = await supabase
+        const { data: feeTransactionRows, error: feeTransactionError } = await supabaseAdmin
           .from("transactions")
           .insert({
             reference_number: `ATM-FEE-${Date.now()}`,
@@ -286,15 +389,20 @@ export async function POST(
         const currentBalance = Number(account.balance || 0);
 
         if (amount > currentBalance) {
-          return NextResponse.json(
-            { error: "Insufficient funds. Withdrawal amount exceeds current balance." },
-            { status: 400 }
-          );
+          return failPendingAtmSimulation({
+            supabase: supabaseAdmin,
+            simulationId: simulation.atm_simulation_id,
+            transactionId: simulation.transaction_id,
+            action,
+            atmName: simulation.atm_name,
+            atmLocation: simulation.atm_location,
+            reason: "Insufficient funds. Withdrawal amount exceeds current balance.",
+          });
         }
 
         if (isSavingsAccount(account.account_type)) {
           const savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
-            supabase,
+            supabaseAdmin,
             account.account_id,
             currentBalance
           );
@@ -302,21 +410,26 @@ export async function POST(
             getRemainingSavingsWithdrawalAllowance(savingsMonthlyActivity);
 
           if (amount > remainingAllowance) {
-            return NextResponse.json(
-              {
-                error: `Savings accounts can only withdraw up to 10% of the monthly starting balance. Remaining allowance: $${remainingAllowance.toFixed(
-                  2
-                )}.`,
-              },
-              { status: 400 }
-            );
+            return failPendingAtmSimulation({
+              supabase: supabaseAdmin,
+              simulationId: simulation.atm_simulation_id,
+              transactionId: simulation.transaction_id,
+              action,
+              atmName: simulation.atm_name,
+              atmLocation: simulation.atm_location,
+              reason: `Savings accounts can only withdraw up to 10% of the monthly starting balance. Remaining allowance: $${remainingAllowance.toFixed(
+                2
+              )}.`,
+            });
           }
 
-          const { error: activityError } = await supabase
+          const { error: activityError } = await supabaseAdmin
             .from("savings_monthly_activity")
             .update({
               withdrawn_amount:
-                Number(savingsMonthlyActivity.withdrawn_amount || 0) + amount,
+                roundCurrency(
+                  Number(savingsMonthlyActivity.withdrawn_amount || 0) + amount
+                ),
               updated_at: nowIso,
             })
             .eq("account_id", account.account_id)
@@ -332,7 +445,7 @@ export async function POST(
 
         const nextBalance = roundCurrency(currentBalance - amount);
 
-        const { error: updateAccountError } = await supabase
+        const { error: updateAccountError } = await supabaseAdmin
           .from("accounts")
           .update({
             balance: nextBalance,
@@ -349,7 +462,7 @@ export async function POST(
       }
     }
 
-    const { data: updatedTransaction, error: updateTransactionError } = await supabase
+    const { data: updatedTransaction, error: updateTransactionError } = await supabaseAdmin
       .from("transactions")
       .update({
         status: "completed",
@@ -367,6 +480,29 @@ export async function POST(
           error:
             updateTransactionError?.message ||
             "Balance updated but the ATM transaction record could not be completed.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const { data: updatedSimulation, error: updateSimulationError } = await supabaseAdmin
+      .from("atm_simulations")
+      .update({
+        status: "completed",
+        completed_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("status", "pending")
+      .eq("atm_simulation_id", simulation.atm_simulation_id)
+      .select("atm_simulation_id")
+      .maybeSingle();
+
+    if (updateSimulationError || !updatedSimulation) {
+      return NextResponse.json(
+        {
+          error:
+            updateSimulationError?.message ||
+            "ATM transaction completed but the ATM session could not be marked complete.",
         },
         { status: 500 }
       );

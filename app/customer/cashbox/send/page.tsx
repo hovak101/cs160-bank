@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CashboxSendForm from "@/components/customer/cashbox-send-form";
+import { getOrCreateCashboxForCustomer } from "@/lib/banking/cashbox";
 import { isDepositEligible } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
@@ -13,11 +14,6 @@ type Account = {
   balance: number;
   currency: string;
   status: string;
-};
-
-type CashboxRow = {
-  cashbox_id: string;
-  balance: number;
 };
 
 export default async function CashBoxSendPage() {
@@ -35,7 +31,7 @@ export default async function CashBoxSendPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const { data: accountsData } = await supabase
     .from("accounts")
@@ -60,32 +56,7 @@ export default async function CashBoxSendPage() {
     isDepositEligible(account.account_type)
   );
 
-  let cashbox: CashboxRow | null = null;
-
-  const { data: cashboxData } = await (supabase as any)
-    .from("cashboxes")
-    .select("cashbox_id, balance")
-    .eq("customer_id", customer.customer_id)
-    .maybeSingle();
-
-  cashbox = cashboxData as CashboxRow | null;
-
-  if (!cashbox) {
-    const { data: createdCashbox, error: createCashboxError } = await (supabase as any)
-      .from("cashboxes")
-      .insert({
-        customer_id: customer.customer_id,
-        balance: 0,
-      })
-      .select("cashbox_id, balance")
-      .single();
-
-    if (createCashboxError) {
-      throw new Error(createCashboxError.message);
-    }
-
-    cashbox = createdCashbox as CashboxRow;
-  }
+  const cashbox = await getOrCreateCashboxForCustomer(customer.customer_id);
 
   const cashboxBalance = Number(cashbox?.balance ?? 0);
 

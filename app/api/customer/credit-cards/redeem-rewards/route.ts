@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isCreditAccount, isDepositEligible, roundCurrency } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
       roundCurrency(Number(destinationAccount.balance || 0) + rewardsBalance);
     const nowIso = new Date().toISOString();
 
-    const { error: updateRewardsError } = await supabase
+    const { error: updateRewardsError } = await supabaseAdmin
       .from("credit_accounts")
       .update({
         rewards_points: 0,
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: updateDestinationError } = await supabase
+    const { error: updateDestinationError } = await supabaseAdmin
       .from("accounts")
       .update({
         balance: nextDestinationBalance,
@@ -162,7 +163,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: transactionError } = await supabase
+    const { error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: `RWD-${Date.now()}`,

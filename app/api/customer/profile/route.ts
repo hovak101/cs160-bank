@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    const hasPhoneNumber = Object.prototype.hasOwnProperty.call(body, "phone_number");
+    const hasTaxId = Object.prototype.hasOwnProperty.call(body, "tax_id");
+    const hasCountry = Object.prototype.hasOwnProperty.call(body, "country");
+    const hasAddressLine1 = Object.prototype.hasOwnProperty.call(body, "address_line_1");
+    const hasAddressLine2 = Object.prototype.hasOwnProperty.call(body, "address_line_2");
+    const hasCity = Object.prototype.hasOwnProperty.call(body, "city");
+    const hasState = Object.prototype.hasOwnProperty.call(body, "state");
+    const hasZipCode = Object.prototype.hasOwnProperty.call(body, "zip_code");
 
     const firstName = body.first_name?.trim() || "";
     const lastName = body.last_name?.trim() || "";
@@ -41,7 +50,9 @@ export async function POST(request: Request) {
 
     const { data: existingCustomer, error: customerCheckError } = await supabase
       .from("customers")
-      .select("customer_id, user_id")
+      .select(
+        "customer_id, user_id, phone_number, tax_id, country, address_line_1, address_line_2, city, state, zip_code"
+      )
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -55,7 +66,7 @@ export async function POST(request: Request) {
 
     // Check whether phone number already belongs to someone else
     if (phoneNumber) {
-      let phoneQuery = supabase
+      let phoneQuery = supabaseAdmin
         .from("customers")
         .select("customer_id, user_id")
         .eq("phone_number", phoneNumber)
@@ -84,7 +95,7 @@ export async function POST(request: Request) {
 
     // Check whether tax ID already belongs to someone else
     if (taxId) {
-      let taxQuery = supabase
+      let taxQuery = supabaseAdmin
         .from("customers")
         .select("customer_id, user_id")
         .eq("tax_id", taxId)
@@ -112,19 +123,23 @@ export async function POST(request: Request) {
     }
 
     if (existingCustomer) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from("customers")
         .update({
           first_name: firstName,
           last_name: lastName,
-          phone_number: phoneNumber,
-          tax_id: taxId,
-          country,
-          address_line_1: addressLine1,
-          address_line_2: addressLine2,
-          city,
-          state,
-          zip_code: zipCode,
+          phone_number: hasPhoneNumber ? phoneNumber : existingCustomer.phone_number,
+          tax_id: hasTaxId ? taxId : existingCustomer.tax_id,
+          country: hasCountry ? country : existingCustomer.country,
+          address_line_1: hasAddressLine1
+            ? addressLine1
+            : existingCustomer.address_line_1,
+          address_line_2: hasAddressLine2
+            ? addressLine2
+            : existingCustomer.address_line_2,
+          city: hasCity ? city : existingCustomer.city,
+          state: hasState ? state : existingCustomer.state,
+          zip_code: hasZipCode ? zipCode : existingCustomer.zip_code,
         })
         .eq("user_id", user.id);
 
@@ -136,7 +151,7 @@ export async function POST(request: Request) {
         );
       }
     } else {
-      const { error: insertError } = await supabase.from("customers").insert({
+      const { error: insertError } = await supabaseAdmin.from("customers").insert({
         user_id: user.id,
         first_name: firstName,
         last_name: lastName,

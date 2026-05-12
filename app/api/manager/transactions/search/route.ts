@@ -64,13 +64,25 @@ export async function GET(req: NextRequest) {
 
     const searchParams = req.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const pageSize = Math.max(1, parseInt(searchParams.get("pageSize") || "10"));
+    // Reduce max page size to 10 to avoid large result sets
+    const pageSize = Math.min(10, Math.max(1, parseInt(searchParams.get("pageSize") || "10")));
     const transactionType = searchParams.get("transactionType");
     const referenceNumber = searchParams.get("referenceNumber");
 
-    let query = supabase
+    // Always apply a default date range to avoid scanning the entire table
+    const dateRangeEnd = new Date();
+    const dateRangeStart = new Date();
+    dateRangeStart.setDate(dateRangeStart.getDate() - 30); // Last 30 days by default
+
+    // Build base query for filtering (reusable for both count and fetch)
+    let filterQuery = supabase
       .from("transactions")
-      .select("*", { count: "exact" });
+      .select(
+        "transaction_id, reference_number, source_account_id, destination_account_id, amount, transaction_type, status, description, executed_at",
+        { count: "exact" }
+      )
+      .gte("executed_at", dateRangeStart.toISOString())
+      .lte("executed_at", dateRangeEnd.toISOString());
 
     // Filter by transaction type if specified (deposits, withdrawals)
     if (transactionType && transactionType !== "all") {
@@ -82,26 +94,33 @@ export async function GET(req: NextRequest) {
       }
 
       if (transactionType === "deposit") {
-        query = query.in("transaction_type", ["deposit", "atm_deposit"]);
+        filterQuery = filterQuery.in("transaction_type", ["deposit", "atm_deposit"]);
       } else if (transactionType === "withdrawal") {
-        query = query.in("transaction_type", ["withdrawal", "atm_withdrawal"]);
+        filterQuery = filterQuery.in("transaction_type", ["withdrawal", "atm_withdrawal"]);
       } else {
-        query = query.eq("transaction_type", transactionType);
+        filterQuery = filterQuery.eq("transaction_type", transactionType);
       }
     }
 
-    // Filter by reference number if provided
-    if (referenceNumber?.trim()) {
-      query = query.ilike("reference_number", `%${referenceNumber.trim()}%`);
+    // Limit to recent transactions if doing reference search
+    // This ensures we're searching a narrower dataset
+    const trimmedRef = referenceNumber?.trim();
+    if (trimmedRef && trimmedRef.length >= 3) {
+      filterQuery = filterQuery.ilike("reference_number", `%${trimmedRef}%`);
+    } else if (trimmedRef && trimmedRef.length > 0 && trimmedRef.length < 3) {
+      return NextResponse.json(
+        { error: "Reference number search requires at least 3 characters." },
+        { status: 400 }
+      );
     }
 
     // Get total count
-    const { count: totalCount } = await query;
+    const { count: totalCount } = await filterQuery;
     const total = totalCount || 0;
     const totalPages = Math.ceil(total / pageSize);
 
     // Fetch paginated results ordered by executed_at descending
-    const { data: transactions, error } = await query
+    const { data: transactions, error } = await filterQuery
       .order("executed_at", { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
 

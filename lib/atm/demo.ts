@@ -93,16 +93,20 @@ export function mapDemoAtmToSelection(atm: DemoAtmLocation): AtmLocationSelectio
 export function buildAtmTransactionDescription(
   action: AtmAction,
   atm: Pick<AtmLocationSelection, "name" | "location">,
-  status: "pending" | "completed"
+  status: "pending" | "completed" | "failed"
 ) {
   const prefix =
     action === "withdraw"
       ? status === "pending"
         ? "Pending ATM withdrawal"
-        : "ATM withdrawal"
+        : status === "failed"
+          ? "Failed ATM withdrawal"
+          : "ATM withdrawal"
       : status === "pending"
         ? "Pending ATM deposit"
-        : "ATM deposit";
+        : status === "failed"
+          ? "Failed ATM deposit"
+          : "ATM deposit";
 
   return `${prefix} at ${atm.name} - ${atm.location}`;
 }
@@ -111,7 +115,7 @@ export function buildStoredAtmTransactionDescription(
   action: AtmAction,
   atmName: string,
   atmLocation: string,
-  status: "pending" | "completed"
+  status: "pending" | "completed" | "failed"
 ) {
   return buildAtmTransactionDescription(
     action,

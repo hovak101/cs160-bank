@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,7 @@ export async function POST(
       action === "withdraw" ? "Cancelled ATM withdrawal" : "Cancelled ATM deposit"
     } at ${simulation.atm_name} - ${simulation.atm_location}`;
 
-    const { data: updatedTransaction, error: updateTransactionError } = await supabase
+    const { data: updatedTransaction, error: updateTransactionError } = await supabaseAdmin
       .from("transactions")
       .update({
         status: "failed",
@@ -103,7 +104,7 @@ export async function POST(
       );
     }
 
-    const { data: updatedSimulation, error: updateSimulationError } = await supabase
+    const { data: updatedSimulation, error: updateSimulationError } = await supabaseAdmin
       .from("atm_simulations")
       .update({
         status: "failed",

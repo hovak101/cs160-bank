@@ -74,6 +74,38 @@ type PlaidAccountsGetResponse = {
   request_id?: string;
 };
 
+type PlaidWebhookUpdateResponse = {
+  request_id?: string;
+  new_webhook_url?: string | null;
+};
+
+type PlaidSandboxItemFireWebhookResponse = {
+  webhook_fired?: boolean;
+  request_id?: string;
+};
+
+type PlaidAccountsBalanceGetResponse = {
+  accounts?: Array<{
+    account_id: string;
+    balances?: {
+      available?: number | null;
+      current?: number | null;
+      iso_currency_code?: string | null;
+      limit?: number | null;
+      unofficial_currency_code?: string | null;
+    } | null;
+    mask?: string | null;
+    name?: string | null;
+    official_name?: string | null;
+    subtype?: string | null;
+    type?: string | null;
+  }>;
+  item?: {
+    item_id?: string;
+  } | null;
+  request_id?: string;
+};
+
 type PlaidLedgerGetResponse = {
   ledger_id?: string;
   balance?: {
@@ -177,14 +209,15 @@ export function isSandboxPlaid() {
 export async function createPlaidLinkToken(params: {
   clientUserId: string;
   legalName?: string;
+  webhookUrl?: string;
 }) {
-  return plaidRequest<PlaidLinkTokenResponse>("/link/token/create", {
+  const body: Record<string, unknown> = {
     user: {
       client_user_id: params.clientUserId,
       legal_name: params.legalName,
     },
     client_name: "Vitality Bank",
-    products: ["auth", "transfer"],
+    products: ["auth", "transfer", "transactions"],
     language: "en",
     country_codes: ["US"],
     account_filters: {
@@ -192,7 +225,13 @@ export async function createPlaidLinkToken(params: {
         account_subtypes: ["checking", "savings"],
       },
     },
-  });
+  };
+
+  if (params.webhookUrl) {
+    body.webhook = params.webhookUrl;
+  }
+
+  return plaidRequest<PlaidLinkTokenResponse>("/link/token/create", body);
 }
 
 export async function exchangePlaidPublicToken(publicToken: string) {
@@ -203,6 +242,12 @@ export async function exchangePlaidPublicToken(publicToken: string) {
 
 export async function getPlaidAccounts(accessToken: string) {
   return plaidRequest<PlaidAccountsGetResponse>("/accounts/get", {
+    access_token: accessToken,
+  });
+}
+
+export async function getPlaidAccountBalances(accessToken: string) {
+  return plaidRequest<PlaidAccountsBalanceGetResponse>("/accounts/balance/get", {
     access_token: accessToken,
   });
 }
@@ -246,6 +291,40 @@ export async function createPlaidTransfer(params: {
     amount: params.amount,
     description: params.description,
   });
+}
+
+export async function updatePlaidItemWebhook(
+  accessToken: string,
+  webhookUrl: string | null
+) {
+  return plaidRequest<PlaidWebhookUpdateResponse>("/item/webhook/update", {
+    access_token: accessToken,
+    webhook: webhookUrl,
+  });
+}
+
+export async function firePlaidSandboxItemWebhook(params: {
+  accessToken: string;
+  webhookCode: "DEFAULT_UPDATE" | "SYNC_UPDATES_AVAILABLE";
+  webhookType?: "TRANSACTIONS" | "AUTH";
+}) {
+  if (!isSandboxPlaid()) {
+    return null;
+  }
+
+  const body: Record<string, unknown> = {
+    access_token: params.accessToken,
+    webhook_code: params.webhookCode,
+  };
+
+  if (params.webhookType) {
+    body.webhook_type = params.webhookType;
+  }
+
+  return plaidRequest<PlaidSandboxItemFireWebhookResponse>(
+    "/sandbox/item/fire_webhook",
+    body
+  );
 }
 
 export async function getPlaidLedgerBalance() {

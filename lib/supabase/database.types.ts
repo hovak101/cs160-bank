@@ -732,8 +732,11 @@ export type Database = {
         Row: {
           access_token_auth_tag: string
           access_token_iv: string
+          available_balance: number | null
+          balance_synced_at: string | null
           created_at: string
           customer_id: string
+          current_balance: number | null
           encrypted_access_token: string
           institution_name: string | null
           last_verified_at: string | null
@@ -751,8 +754,11 @@ export type Database = {
         Insert: {
           access_token_auth_tag: string
           access_token_iv: string
+          available_balance?: number | null
+          balance_synced_at?: string | null
           created_at?: string
           customer_id: string
+          current_balance?: number | null
           encrypted_access_token: string
           institution_name?: string | null
           last_verified_at?: string | null
@@ -770,8 +776,11 @@ export type Database = {
         Update: {
           access_token_auth_tag?: string
           access_token_iv?: string
+          available_balance?: number | null
+          balance_synced_at?: string | null
           created_at?: string
           customer_id?: string
+          current_balance?: number | null
           encrypted_access_token?: string
           institution_name?: string | null
           last_verified_at?: string | null

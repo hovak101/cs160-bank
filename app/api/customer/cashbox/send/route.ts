@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 import { isDepositEligible, isSavingsAccount } from "@/lib/banking/rules";
 import {
   getOrCreateSavingsMonthlyActivity,
   getRemainingSavingsWithdrawalAllowance,
 } from "@/lib/banking/server";
+import { roundCurrency } from "@/lib/banking/rules";
 import { validateMoneyAmount } from "@/lib/banking/validation";
 
 export const dynamic = "force-dynamic";
@@ -34,14 +36,22 @@ export async function POST(request: Request) {
     const body = await request.json();
     const phone_number = normalizePhone(body.phone_number);
     const source_account_id = String(body.source_account_id ?? "").trim();
-    const amount = Number(body.amount ?? 0);
+    const parsedAmount = parseCurrencyInput(body.amount, {
+      fieldLabel: "CashBox send amount",
+    });
 
-    if (!phone_number || !source_account_id || !Number.isFinite(amount) || amount <= 0) {
+    if (!phone_number || !source_account_id) {
       return NextResponse.json(
-        { error: "Phone number, source account, and valid amount are required." },
+        { error: "Phone number and source account are required." },
         { status: 400 }
       );
     }
+
+    if (!parsedAmount.ok) {
+      return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
+    }
+
+    const amount = parsedAmount.value;
 
     const amountError = validateMoneyAmount(amount);
     if (amountError) {
@@ -95,7 +105,7 @@ export async function POST(request: Request) {
 
     if (isSavingsAccount(sourceAccount.account_type)) {
       savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
-        supabaseAdmin as any,
+        supabaseAdmin,
         sourceAccount.account_id,
         Number(sourceAccount.balance ?? 0)
       );
@@ -116,7 +126,7 @@ export async function POST(request: Request) {
 
     const { data: receiverCustomer, error: receiverCustomerError } = await supabaseAdmin
       .from("customers")
-      .select("customer_id, first_name, last_name, phone_number")
+      .select("customer_id, first_name, last_name, phone_number, user_id")
       .eq("phone_number", phone_number)
       .single();
 
@@ -126,6 +136,19 @@ export async function POST(request: Request) {
 
     if (receiverCustomer.customer_id === senderCustomer.customer_id) {
       return NextResponse.json({ error: "You cannot send money to yourself." }, { status: 400 });
+    }
+
+    const { data: receiverUser } = await supabaseAdmin
+      .from("users")
+      .select("role")
+      .eq("user_id", receiverCustomer.user_id)
+      .maybeSingle();
+
+    if (["admin", "manager"].includes((receiverUser?.role ?? "").toLowerCase())) {
+      return NextResponse.json(
+        { error: "Cannot send money to admin or manager." },
+        { status: 403 }
+      );
     }
 
     let { data: receiverCashbox } = await supabaseAdmin
@@ -157,8 +180,12 @@ export async function POST(request: Request) {
       receiverCashbox = createdCashbox;
     }
 
-    const newSourceBalance = Number(sourceAccount.balance) - amount;
-    const newCashboxBalance = Number(receiverCashbox.balance ?? 0) + amount;
+    const newSourceBalance = roundCurrency(
+      Number(sourceAccount.balance) - amount
+    );
+    const newCashboxBalance = roundCurrency(
+      Number(receiverCashbox.balance ?? 0) + amount
+    );
     const referenceNumber = generateReferenceNumber();
 
     const { error: updateSourceError } = await supabaseAdmin
@@ -178,7 +205,9 @@ export async function POST(request: Request) {
         .from("savings_monthly_activity")
         .update({
           withdrawn_amount:
-            Number(savingsMonthlyActivity.withdrawn_amount || 0) + amount,
+            roundCurrency(
+              Number(savingsMonthlyActivity.withdrawn_amount || 0) + amount
+            ),
           updated_at: new Date().toISOString(),
         })
         .eq("account_id", sourceAccount.account_id)

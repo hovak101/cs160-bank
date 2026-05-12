@@ -97,5 +97,21 @@ export async function POST(
     }
   }
 
+  const { error: scheduleUpdateError } = await supabaseAdmin
+    .from("bill_schedules")
+    .update({ status: "cancelled" })
+    .eq("account_id", accountId)
+    .eq("status", "active");
+
+  if (scheduleUpdateError) {
+    return NextResponse.json(
+      {
+        error:
+          "Account closed, but active bill payment schedules could not be stopped.",
+      },
+      { status: 500 }
+    );
+  }
+
   return NextResponse.json({ success: true, message: "Account successfully closed :)" });
 }

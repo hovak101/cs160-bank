@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { getFriendlyAuthMessage } from "@/lib/auth/messages";
+import { MAX_EMAIL_LENGTH, validateEmailAddress } from "@/lib/auth/email";
 
 export function SignUpForm({
   className,
@@ -34,14 +36,21 @@ export function SignUpForm({
     setError(null);
 
     if (password !== repeatPassword) {
-      setError("Passwords do not match");
+      setError("Passwords do not match.");
+      setIsLoading(false);
+      return;
+    }
+
+    const validatedEmail = validateEmailAddress(email);
+    if (!validatedEmail.ok) {
+      setError(validatedEmail.error);
       setIsLoading(false);
       return;
     }
 
     try {
       const { error } = await supabase.auth.signUp({
-        email,
+        email: validatedEmail.value,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/protected`,
@@ -50,7 +59,12 @@ export function SignUpForm({
       if (error) throw error;
       router.push("/auth/sign-up-success");
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
+      setError(
+        getFriendlyAuthMessage(
+          error instanceof Error ? error.message : null,
+          "We could not create your account. Please try again."
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -72,6 +86,7 @@ export function SignUpForm({
                   id="email"
                   type="email"
                   placeholder="m@example.com"
+                  maxLength={MAX_EMAIL_LENGTH}
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

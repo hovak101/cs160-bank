@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Landmark, LogOut, Menu, X } from "lucide-react";
+import { Bell, Landmark, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { LogoutButton } from "@/components/logout-button";
 

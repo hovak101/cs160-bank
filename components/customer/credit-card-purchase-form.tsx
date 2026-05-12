@@ -8,6 +8,7 @@ import {
   isValidSecurityCodeFormat,
   normalizeSecurityCode,
 } from "@/lib/banking/security-code";
+import { parseCurrencyInput } from "@/lib/banking/amount";
 
 type CreditAccount = {
   account_id: string;
@@ -42,12 +43,13 @@ export function CreditCardPurchaseForm({
     [accounts, selectedAccount]
   );
 
-  const numericAmount = Number(amount || 0);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setMessage("");
+    const parsedAmount = parseCurrencyInput(amount, {
+      fieldLabel: "Amount",
+    });
 
     if (!selectedAccount) {
       setError("Please choose a credit card.");
@@ -59,10 +61,12 @@ export function CreditCardPurchaseForm({
       return;
     }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError("Please enter a valid amount.");
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.error);
       return;
     }
+
+    const numericAmount = parsedAmount.value;
 
     if (!isValidSecurityCodeFormat(securityCode)) {
       setError("Please enter the 3-digit security code for this card.");

@@ -27,7 +27,7 @@ export default async function AtmPage({
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!customer) redirect("/customer/onboarding");
+  if (!customer) redirect("/auth/onboarding");
 
   const [{ data: accounts }, { data: pendingSimulations }] = await Promise.all([
     supabase

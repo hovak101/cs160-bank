@@ -6,6 +6,13 @@ import {
   getRemainingSavingsWithdrawalAllowance,
 } from "@/lib/banking/server";
 import {
+  MAX_ACCOUNT_BALANCE,
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+  willExceedMaxAccountBalance,
+} from "@/lib/banking/amount";
+import {
   isDepositEligible,
   isSavingsAccount,
   roundCurrency,
@@ -14,8 +21,13 @@ import {
   PlaidApiError,
   createPlaidTransfer,
   createPlaidTransferAuthorization,
+  firePlaidSandboxItemWebhook,
   isSandboxPlaid,
 } from "@/lib/plaid/server";
+import {
+  getPreferredPlaidBalance,
+  syncPlaidBalancesForItem,
+} from "@/lib/plaid/sync";
 import { decryptText } from "@/lib/security/encryption";
 import { validateMoneyAmount } from "@/lib/banking/validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -43,14 +55,19 @@ export async function POST(req: Request) {
 
     const direction = String(formData.get("direction") || "") as Direction;
     const internalAccountId = String(formData.get("internal_account_id") || "");
-    const amountValue = roundCurrency(Number(formData.get("amount") || 0));
-
     if (direction !== "inbound" && direction !== "outbound") {
       return NextResponse.json(
         { error: "Transfer direction is required." },
         { status: 400 }
       );
     }
+
+    const parsedAmount = parseCurrencyInput(formData.get("amount"), {
+      fieldLabel: "Transfer amount",
+      max: direction === "inbound" ? MANUAL_DEPOSIT_LIMIT_USD : undefined,
+      maxErrorMessage:
+        direction === "inbound" ? LARGE_DEPOSIT_SUPPORT_MESSAGE : undefined,
+    });
 
     if (!internalAccountId) {
       return NextResponse.json(
@@ -66,13 +83,11 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!amountValue || amountValue <= 0) {
-      return NextResponse.json(
-        { error: "Enter a valid transfer amount." },
-        { status: 400 }
-      );
+    if (!parsedAmount.ok) {
+      return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
     }
 
+    const amountValue = parsedAmount.value;
     const amountError = validateMoneyAmount(amountValue);
     if (amountError) {
       return NextResponse.json({ error: amountError }, { status: 400 });
@@ -106,7 +121,7 @@ export async function POST(req: Request) {
     const { data: linkedAccount, error: linkedAccountError } = await supabaseAdmin
       .from("plaid_linked_accounts")
       .select(
-        "linked_account_id, plaid_account_id, encrypted_access_token, access_token_iv, access_token_auth_tag, institution_name, plaid_account_name, plaid_account_mask, status"
+        "linked_account_id, plaid_account_id, plaid_item_id, encrypted_access_token, access_token_iv, access_token_auth_tag, institution_name, plaid_account_name, plaid_account_mask, status, available_balance, current_balance"
       )
       .eq("linked_account_id", linkedAccountId)
       .eq("customer_id", customer.customer_id)
@@ -156,6 +171,24 @@ export async function POST(req: Request) {
 
     const currentBalance = roundCurrency(Number(account.balance || 0));
 
+    if (
+      direction === "inbound" &&
+      willExceedMaxAccountBalance(currentBalance, amountValue)
+    ) {
+      return NextResponse.json(
+        {
+          error: `Destination account cannot exceed ${new Intl.NumberFormat(
+            "en-US",
+            {
+              style: "currency",
+              currency: "USD",
+            }
+          ).format(MAX_ACCOUNT_BALANCE)}.`,
+        },
+        { status: 400 }
+      );
+    }
+
     let savingsMonthlyActivity:
       | Awaited<ReturnType<typeof getOrCreateSavingsMonthlyActivity>>
       | null = null;
@@ -170,7 +203,7 @@ export async function POST(req: Request) {
 
       if (isSavingsAccount(account.account_type)) {
         savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
-          supabase,
+          supabaseAdmin,
           account.account_id,
           currentBalance
         );
@@ -204,29 +237,59 @@ export async function POST(req: Request) {
             String(linkedAccount.plaid_account_mask || "")
           )}`;
 
+    const plaidAccessToken = decryptText({
+      ciphertext: String(linkedAccount.encrypted_access_token || ""),
+      iv: String(linkedAccount.access_token_iv || ""),
+      authTag: String(linkedAccount.access_token_auth_tag || ""),
+    });
+
+    let externalAvailableBalance = getPreferredPlaidBalance({
+      available_balance:
+        typeof linkedAccount.available_balance === "number"
+          ? linkedAccount.available_balance
+          : null,
+      current_balance:
+        typeof linkedAccount.current_balance === "number"
+          ? linkedAccount.current_balance
+          : null,
+    });
+
+    if (
+      direction === "inbound" &&
+      externalAvailableBalance === null &&
+      linkedAccount.plaid_item_id
+    ) {
+      const syncedBalances = await syncPlaidBalancesForItem(
+        String(linkedAccount.plaid_item_id)
+      );
+
+      externalAvailableBalance =
+        syncedBalances.balancesByAccountId.get(
+          String(linkedAccount.plaid_account_id || "")
+        )?.available_balance ??
+        syncedBalances.balancesByAccountId.get(
+          String(linkedAccount.plaid_account_id || "")
+        )?.current_balance ??
+        null;
+    }
+
+    if (
+      direction === "inbound" &&
+      typeof externalAvailableBalance === "number" &&
+      amountValue > externalAvailableBalance
+    ) {
+      return NextResponse.json(
+        {
+          error: `Amount exceeds available external balance (${externalAvailableBalance.toFixed(
+            2
+          )}).`,
+        },
+        { status: 400 }
+      );
+    }
+
     if (isSandboxPlaid()) {
-      // In Plaid Sandbox, a Link-connected external account does not expose a
-      // reliable writable balance surface for keeping Transfer authorization and
-      // Plaid Ledger in sync with our demo bank balances. For a stable demo,
-      // mirror the selected bank account balance as the external account's
-      // available balance for outbound transfers and simulate success entirely
-      // within the app. Inbound transfers stay effectively unlimited so demo
-      // deposits are not blocked by Plaid sandbox balance constraints.
-      const mirroredExternalBalance = currentBalance;
-
-      if (direction === "outbound" && amountValue > mirroredExternalBalance) {
-        return NextResponse.json(
-          {
-            error: `Sandbox demo external balance mirrors your selected bank account and currently has $${mirroredExternalBalance.toFixed(
-              2
-            )}.`,
-          },
-          { status: 400 }
-        );
-      }
-
       return finalizeExternalTransfer({
-        supabase,
         accountId: account.account_id,
         currentBalance,
         amountValue,
@@ -235,14 +298,19 @@ export async function POST(req: Request) {
         savingsMonthlyActivity,
         linkedAccountId,
         customerId: customer.customer_id,
+        plaidAccessToken,
+        linkedAccountSnapshot: {
+          available_balance:
+            typeof linkedAccount.available_balance === "number"
+              ? linkedAccount.available_balance
+              : null,
+          current_balance:
+            typeof linkedAccount.current_balance === "number"
+              ? linkedAccount.current_balance
+              : null,
+        },
       });
     }
-
-    const plaidAccessToken = decryptText({
-      ciphertext: String(linkedAccount.encrypted_access_token || ""),
-      iv: String(linkedAccount.access_token_iv || ""),
-      authTag: String(linkedAccount.access_token_auth_tag || ""),
-    });
 
     const authorization = await createPlaidTransferAuthorization({
       accessToken: plaidAccessToken,
@@ -278,7 +346,6 @@ export async function POST(req: Request) {
     });
 
     return finalizeExternalTransfer({
-      supabase,
       accountId: account.account_id,
       currentBalance,
       amountValue,
@@ -287,6 +354,17 @@ export async function POST(req: Request) {
       savingsMonthlyActivity,
       linkedAccountId,
       customerId: customer.customer_id,
+      plaidAccessToken,
+      linkedAccountSnapshot: {
+        available_balance:
+          typeof linkedAccount.available_balance === "number"
+            ? linkedAccount.available_balance
+            : null,
+        current_balance:
+          typeof linkedAccount.current_balance === "number"
+            ? linkedAccount.current_balance
+            : null,
+      },
     });
   } catch (error) {
     console.error("external transfer error:", error);
@@ -336,7 +414,6 @@ function formatExternalLabel(
 }
 
 async function finalizeExternalTransfer(params: {
-  supabase: Awaited<ReturnType<typeof createClient>>;
   accountId: string;
   currentBalance: number;
   amountValue: number;
@@ -346,6 +423,11 @@ async function finalizeExternalTransfer(params: {
     | Awaited<ReturnType<typeof getOrCreateSavingsMonthlyActivity>>
     | null;
   linkedAccountId?: string;
+  linkedAccountSnapshot?: {
+    available_balance: number | null;
+    current_balance: number | null;
+  };
+  plaidAccessToken?: string;
   customerId?: string;
 }) {
   const nowIso = new Date().toISOString();
@@ -355,9 +437,21 @@ async function finalizeExternalTransfer(params: {
       : roundCurrency(params.currentBalance - params.amountValue);
 
   if (params.linkedAccountId && params.customerId) {
+    const plaidBalanceUpdate =
+      params.linkedAccountSnapshot
+        ? buildUpdatedPlaidBalanceSnapshot(
+            params.linkedAccountSnapshot,
+            params.direction,
+            params.amountValue
+          )
+        : null;
+
     await supabaseAdmin
       .from("plaid_linked_accounts")
       .update({
+        available_balance: plaidBalanceUpdate?.available_balance,
+        current_balance: plaidBalanceUpdate?.current_balance,
+        balance_synced_at: plaidBalanceUpdate ? nowIso : undefined,
         last_verified_at: nowIso,
         updated_at: nowIso,
       })
@@ -365,7 +459,7 @@ async function finalizeExternalTransfer(params: {
       .eq("customer_id", params.customerId);
   }
 
-  const { error: updateAccountError } = await params.supabase
+  const { error: updateAccountError } = await supabaseAdmin
     .from("accounts")
     .update({
       balance: nextBalance,
@@ -381,12 +475,14 @@ async function finalizeExternalTransfer(params: {
   }
 
   if (params.savingsMonthlyActivity) {
-    const { error: activityError } = await params.supabase
+    const { error: activityError } = await supabaseAdmin
       .from("savings_monthly_activity")
       .update({
         withdrawn_amount:
-          Number(params.savingsMonthlyActivity.withdrawn_amount || 0) +
-          params.amountValue,
+          roundCurrency(
+            Number(params.savingsMonthlyActivity.withdrawn_amount || 0) +
+              params.amountValue
+          ),
         updated_at: nowIso,
       })
       .eq("account_id", params.accountId)
@@ -400,7 +496,7 @@ async function finalizeExternalTransfer(params: {
     }
   }
 
-  const { error: transactionError } = await params.supabase.from("transactions").insert({
+  const { error: transactionError } = await supabaseAdmin.from("transactions").insert({
     reference_number: `EXT-${Date.now()}`,
     source_account_id: params.direction === "outbound" ? params.accountId : null,
     destination_account_id: params.direction === "inbound" ? params.accountId : null,
@@ -428,6 +524,18 @@ async function finalizeExternalTransfer(params: {
   revalidatePath("/customer/transactions");
   revalidatePath("/customer/transfers");
 
+  if (params.plaidAccessToken && isSandboxPlaid()) {
+    try {
+      await firePlaidSandboxItemWebhook({
+        accessToken: params.plaidAccessToken,
+        webhookCode: "DEFAULT_UPDATE",
+        webhookType: "TRANSACTIONS",
+      });
+    } catch (webhookError) {
+      console.error("sandbox plaid webhook fire error:", webhookError);
+    }
+  }
+
   return NextResponse.json({
     success: true,
     message:
@@ -435,4 +543,26 @@ async function finalizeExternalTransfer(params: {
         ? "External transfer completed and funds were added to your account."
         : "External transfer completed and funds were sent to your linked bank.",
   });
+}
+
+function buildUpdatedPlaidBalanceSnapshot(
+  snapshot: {
+    available_balance: number | null;
+    current_balance: number | null;
+  },
+  direction: Direction,
+  amountValue: number
+) {
+  const delta = direction === "inbound" ? -amountValue : amountValue;
+
+  return {
+    available_balance:
+      typeof snapshot.available_balance === "number"
+        ? roundCurrency(snapshot.available_balance + delta)
+        : null,
+    current_balance:
+      typeof snapshot.current_balance === "number"
+        ? roundCurrency(snapshot.current_balance + delta)
+        : null,
+  };
 }

@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getFriendlyAuthMessage } from "@/lib/auth/messages";
+import { MAX_EMAIL_LENGTH, validateEmailAddress } from "@/lib/auth/email";
 
 type AppUserStatus = {
   is_active: boolean | null;
@@ -28,13 +30,20 @@ export function LoginForm() {
     setMessage("");
     setLoading(true);
 
+    const validatedEmail = validateEmailAddress(email);
+    if (!validatedEmail.ok) {
+      setMessage(validatedEmail.error);
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: validatedEmail.value,
       password,
     });
 
     if (error || !data.user) {
-      setMessage(error?.message || "Login failed.");
+      setMessage(getFriendlyAuthMessage(error?.message, "Login failed."));
       setLoading(false);
       return;
     }
@@ -50,7 +59,7 @@ export function LoginForm() {
     const appUser = rawAppUser as unknown as AppUserStatus | null;
 
     if (userError) {
-      setMessage("Failed to verify account status.");
+      setMessage("We could not verify your account status. Please try again.");
       setLoading(false);
       return;
     }
@@ -87,16 +96,16 @@ export function LoginForm() {
       .maybeSingle();
 
     if (customerError) {
-      setMessage("Failed to check profile.");
+      setMessage("We could not load your profile right now. Please try again.");
       setLoading(false);
       return;
     }
 
-    // Skip onboarding for non-customer roles - redirect directly to dashboard
-    if (appUser?.role && appUser.role !== "customer") {
-      router.push("/dashboard");
+    if (appUser?.role === "admin") {
+      router.push("/admin/dashboard");
+    } else if (appUser?.role === "manager") {
+      router.push("/manager/dashboard");
     } else {
-      // For regular customers, check if onboarding is needed
       const needsOnboarding =
         !customer ||
         !customer.first_name?.trim() ||
@@ -105,7 +114,7 @@ export function LoginForm() {
       if (needsOnboarding) {
         router.push("/auth/onboarding");
       } else {
-        router.push("/dashboard");
+        router.push("/customer/dashboard");
       }
     }
 
@@ -127,6 +136,7 @@ export function LoginForm() {
         <input
           type="email"
           placeholder="you@example.com"
+          maxLength={MAX_EMAIL_LENGTH}
           className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
           value={email}
           onChange={(e) => setEmail(e.target.value)}

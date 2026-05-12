@@ -79,7 +79,6 @@ export function TransactionFilters({
       filters.minAmountDisplay = minAmountParsed;
       filters.minAmount = minAmountParsed;
     }
-    if (maxAmount) filters.maxAmount = parseFloat(maxAmount as string);
     if (cashboxOnly) filters.cashboxOnly = true;
     if (showTransactionType && transactionType) filters.transactionType = transactionType;
     if (transactionStatus) filters.transactionStatus = transactionStatus;
@@ -91,7 +90,7 @@ export function TransactionFilters({
   const handleClearFilters = () => {
     setDateSort("desc");
     setSpecificDate("");
-    setMinAmount("");
+    setMinAmount(minAmountThreshold > 0 ? String(minAmountThreshold) : "");
     setMaxAmount("");
     setTransactionStatus("");
     setCashboxOnly(false);
@@ -113,6 +112,7 @@ export function TransactionFilters({
     cashboxOnly ||
     transactionStatus ||
     (showTransactionType && transactionType) ||
+    (minAmount !== "" && Number(minAmount) > minAmountThreshold);
     parseFloat(minAmount as string) > minAmountThreshold;
 
   return (

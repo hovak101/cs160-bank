@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   buildAtmInstruction,
   buildAtmTransactionDescription,
@@ -27,6 +28,11 @@ import {
   isValidSecurityCodeFormat,
   normalizeSecurityCode,
 } from "@/lib/banking/security-code";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+} from "@/lib/banking/amount";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +78,6 @@ export async function POST(request: Request) {
     if (!/^\d+(\.\d{1,2})?$/.test(String(body.amount ?? ""))) {
       return NextResponse.json({ error: "Amount must have at most 2 decimal places." }, { status: 400 });
     }
-    const amount = Number(body.amount ?? 0);
     const securityCode = normalizeSecurityCode(body.security_code);
 
     if (!atmId) {
@@ -89,6 +94,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const parsedAmount = parseCurrencyInput(body.amount, {
+      fieldLabel: "Amount",
+      max: action === "deposit" ? MANUAL_DEPOSIT_LIMIT_USD : undefined,
+      maxErrorMessage:
+        action === "deposit" ? LARGE_DEPOSIT_SUPPORT_MESSAGE : undefined,
+    });
+
     if (!accountId) {
       return NextResponse.json(
         { error: "Please choose one of your accounts." },
@@ -96,12 +108,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!parsedAmount.ok) {
       return NextResponse.json(
-        { error: "Amount must be greater than 0." },
+        { error: parsedAmount.error },
         { status: 400 }
       );
     }
+
+    const amount = parsedAmount.value;
 
     let atmName = providedAtmName;
     let atmLocation = providedAtmLocation;
@@ -270,7 +284,7 @@ export async function POST(request: Request) {
 
         if (isSavingsAccount(account.account_type)) {
           const savingsMonthlyActivity = await getOrCreateSavingsMonthlyActivity(
-            supabase,
+            supabaseAdmin,
             account.account_id,
             currentBalance
           );
@@ -295,7 +309,7 @@ export async function POST(request: Request) {
     const verificationCode =
       action === "withdraw" ? generateAtmVerificationCode() : null;
 
-    const { data: transaction, error: transactionError } = await supabase
+    const { data: transaction, error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: generateAtmReferenceNumber(action),
@@ -319,7 +333,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: simulation, error: simulationError } = await supabase
+    const { data: simulation, error: simulationError } = await supabaseAdmin
       .from("atm_simulations")
       .insert({
         customer_id: customer.customer_id,

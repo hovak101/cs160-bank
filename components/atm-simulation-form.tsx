@@ -33,6 +33,11 @@ import {
   isValidSecurityCodeFormat,
   normalizeSecurityCode,
 } from "@/lib/banking/security-code";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+} from "@/lib/banking/amount";
 
 type Account = {
   account_id: string;
@@ -327,8 +332,12 @@ export function AtmSimulationForm({
     event.preventDefault();
     setError("");
     setMessage("");
-
-    const numericAmount = Number(amount);
+    const parsedAmount = parseCurrencyInput(amount, {
+      fieldLabel: "Amount",
+      max: action === "deposit" ? MANUAL_DEPOSIT_LIMIT_USD : undefined,
+      maxErrorMessage:
+        action === "deposit" ? LARGE_DEPOSIT_SUPPORT_MESSAGE : undefined,
+    });
 
     if (!selectedAtm) {
       setError("Please choose an ATM location.");
@@ -340,10 +349,12 @@ export function AtmSimulationForm({
       return;
     }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError("Amount must be greater than 0.");
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.error);
       return;
     }
+
+    const numericAmount = parsedAmount.value;
 
     if (showSecurityCode && !isValidSecurityCodeFormat(securityCode)) {
       setError("Please enter the 3-digit security code for this credit card.");
@@ -532,9 +543,10 @@ export function AtmSimulationForm({
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
               type="text"
+              maxLength={200}
               value={atmSearchQuery}
               onChange={(event) => {
-                setAtmSearchQuery(event.target.value);
+                setAtmSearchQuery(event.target.value.slice(0, 200));
                 setAtmLookupError("");
                 setAtmLookupMessage("");
               }}

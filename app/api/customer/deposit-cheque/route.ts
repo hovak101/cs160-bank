@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import {
+  LARGE_DEPOSIT_SUPPORT_MESSAGE,
+  MANUAL_DEPOSIT_LIMIT_USD,
+  parseCurrencyInput,
+} from "@/lib/banking/amount";
+import { roundCurrency } from "@/lib/banking/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +36,11 @@ export async function POST(req: Request) {
     
     const formData = await req.formData();
     const accountId = String(formData.get("account_id") || "");
-    const rawAmount = String(formData.get("amount") ?? "");
-    if (!/^\d+(\.\d{1,2})?$/.test(rawAmount)) {
-      return NextResponse.json({ error: "Amount must have at most 2 decimal places." }, { status: 400 });
-    }
-    const amountValue = Number(rawAmount);
+    const parsedAmount = parseCurrencyInput(formData.get("amount"), {
+      fieldLabel: "Amount",
+      max: MANUAL_DEPOSIT_LIMIT_USD,
+      maxErrorMessage: LARGE_DEPOSIT_SUPPORT_MESSAGE,
+    });
     const chequeImage = formData.get("cheque_image") as File | null;
 
     if (!chequeImage) {
@@ -50,13 +57,14 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+    if (!parsedAmount.ok) {
       return NextResponse.json(
-        { error: "Valid amount is required." },
+        { error: parsedAmount.error },
         { status: 400 }
       );
     }
 
+    const amountValue = parsedAmount.value;
     if (amountValue > 5000) {
       return NextResponse.json(
         { error: "Cheque deposits are limited to $5,000." },
@@ -124,9 +132,9 @@ export async function POST(req: Request) {
     }
 
     const currentBalance = Number(account.balance || 0);
-    const newBalance = currentBalance + amountValue;
+    const newBalance = roundCurrency(currentBalance + amountValue);
 
-    const { error: updateAccountError } = await supabase
+    const { error: updateAccountError } = await supabaseAdmin
       .from("accounts")
       .update({
         balance: newBalance,
@@ -143,7 +151,7 @@ export async function POST(req: Request) {
     }
 
     // Insert transaction first to get the transaction_id
-    const { data: transactionData, error: transactionError } = await supabase
+    const { data: transactionData, error: transactionError } = await supabaseAdmin
       .from("transactions")
       .insert({
         reference_number: `CHK-${Date.now()}`,
@@ -176,7 +184,7 @@ export async function POST(req: Request) {
 
     try {
       const buffer = await chequeImage.arrayBuffer();
-      const { error: uploadError, data: uploadData } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("cheques")
         .upload(fileName, new Uint8Array(buffer), {
           contentType: chequeImage.type,
@@ -192,7 +200,7 @@ export async function POST(req: Request) {
       }
 
       // Store image reference in cheque_deposits table
-      const { error: chequeDepositError } = await supabase
+      const { error: chequeDepositError } = await supabaseAdmin
         .from("cheque_deposits")
         .insert({
           transaction_id: transactionData.transaction_id,
