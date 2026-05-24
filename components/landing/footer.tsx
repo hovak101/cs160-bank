@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Landmark } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { Logo } from "@/components/ui/logo";
 import { CurrentYear } from "./current-year";
 
 export function Footer() {
@@ -10,7 +10,7 @@ export function Footer() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <Landmark className="w-4 h-4 text-teal-400" />
+            <Logo className="h-5 w-auto" />
             <span>
               Vitality <span className="text-teal-400">Bank</span>
             </span>

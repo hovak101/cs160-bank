@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Logo } from "@/components/ui/logo";
 import {
   Banknote,
   CreditCard,
@@ -9,7 +10,6 @@ import {
   Users,
   ArrowRightLeft,
   Send,
-  Landmark,
   CalendarClock,
   HandCoins,
   Inbox,
@@ -93,7 +93,7 @@ export default function Sidebar({ open, setOpen }: { open: boolean, setOpen: (op
       <div className="p-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-2 shadow-[0_0_20px_-5px_#22d3ee]">
-            <Landmark className="h-5 w-5 text-cyan-400" />
+            <Logo className="h-6 w-auto" />
           </div>
           <span className="text-white font-bold text-xl">Vitality <span className="text-cyan-400">Bank</span></span>
         </div>

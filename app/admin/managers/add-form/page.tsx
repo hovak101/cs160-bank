@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Landmark } from "lucide-react";
 import Link from "next/link";
+import { Logo } from "@/components/ui/logo";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ export default async function PlaceholderPage() {
       <header className="border-b border-white/10 bg-[#0f172a]/80 backdrop-blur">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-semibold text-white">
-            <Landmark className="h-5 w-5 text-teal-400" />
+            <Logo className="h-6 w-auto" />
             Vitality <span className="text-teal-400">Bank</span>
           </div>
 

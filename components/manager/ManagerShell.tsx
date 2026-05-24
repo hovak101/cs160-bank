@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Landmark, Menu, X } from "lucide-react";
+import { Bell, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { LogoutButton } from "@/components/logout-button";
+import { Logo } from "@/components/ui/logo";
 
 type NavItem = {
   label: string;
@@ -142,7 +143,7 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center justify-between px-5 py-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-500/10 shadow-[0_0_25px_rgba(34,211,238,0.18)]">
-                  <Landmark className="h-5 w-5 text-cyan-400" />
+                  <Logo className="h-6 w-auto" />
                 </div>
 
                 <div className="leading-tight">
@@ -198,7 +199,7 @@ export function ManagerShell({ children }: { children: React.ReactNode }) {
             </button>
 
             <div className="hidden items-center gap-2 md:flex">
-              <Landmark className="h-4 w-4 text-cyan-400" />
+              <Logo className="h-5 w-auto" />
               <span className="text-sm font-semibold text-white">
                 Vitality <span className="text-cyan-400">Bank</span>
               </span>

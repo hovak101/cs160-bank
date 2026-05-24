@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
-import { Landmark } from "lucide-react";
+import { Logo } from "@/components/ui/logo";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ export default async function LoginPage({
       <div className="flex min-h-svh items-center justify-center px-6">
         <div className="w-full max-w-md">
           <div className="mb-6 flex items-center justify-center gap-2">
-            <Landmark className="h-5 w-5 text-cyan-400" />
+            <Logo className="h-6 w-auto" />
             <span className="text-xl font-semibold">
               Vitality <span className="text-cyan-400">Bank</span>
             </span>

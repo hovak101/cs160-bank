@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Landmark, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
+import { Logo } from "@/components/ui/logo";
 import { getFriendlyAuthMessage } from "@/lib/auth/messages";
 import { MAX_EMAIL_LENGTH, validateEmailAddress } from "@/lib/auth/email";
 import {
@@ -70,7 +71,7 @@ export default function Page() {
         <div className="flex min-h-svh items-center justify-center px-6">
           <div className="w-full max-w-md">
             <div className="mb-6 flex items-center justify-center gap-2">
-              <Landmark className="h-5 w-5 text-cyan-400" />
+              <Logo className="h-6 w-auto" />
               <span className="text-xl font-semibold">
                 Vitality <span className="text-cyan-400">Bank</span>
               </span>
@@ -113,7 +114,7 @@ export default function Page() {
       <div className="flex min-h-svh items-center justify-center px-6">
         <div className="w-full max-w-md">
           <div className="mb-6 flex items-center justify-center gap-2">
-            <Landmark className="h-5 w-5 text-cyan-400" />
+            <Logo className="h-6 w-auto" />
             <span className="text-xl font-semibold">
               Vitality <span className="text-cyan-400">Bank</span>
             </span>
