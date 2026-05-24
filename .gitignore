@@ -49,3 +49,4 @@ next-env.d.ts
 
 # local-only Claude rules (never commit)
 /CLAUDE.md
+.env*

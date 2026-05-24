@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RotatingWord } from "./rotating-word";
 
 export function Hero() {
   return (
@@ -9,9 +10,7 @@ export function Hero() {
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-tight">
           <span className="text-foreground">Your Money,</span>
           <br />
-          <span className="bg-gradient-to-r from-teal-400 to-teal-300 bg-clip-text text-transparent">
-            Reimagined.
-          </span>
+          <RotatingWord />
         </h1>
 
         <p className="text-lg text-muted-foreground max-w-xl">
